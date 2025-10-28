@@ -11,7 +11,39 @@ const api = (action, method = 'GET', body = null, timeout = 30000) => {
     credentials: 'include',
     signal: controller.signal
   }).then(r => {
-    clearTimeout(timeoutId);
+    clear  el('#asset-form').onsubmit = e => {
+    e.preventDefault();
+    const id = el('#asset-id').value;
+    
+    // Validate JSON attributes
+    const attrsInput = el('#asset-attributes').value.trim();
+    let attributes = {};
+    if (attrsInput) {
+      try {
+        attributes = JSON.parse(attrsInput);
+        if (typeof attributes !== 'object' || Array.isArray(attributes)) {
+          alert('Attributes must be a valid JSON object');
+          return;
+        }
+      } catch (err) {
+        alert('Invalid JSON in attributes field: ' + err.message);
+        return;
+      }
+    }
+    
+    const data = {
+      name: el('#asset-name').value,
+      type: el('#asset-type').value,
+      mac: el('#asset-mac').value || null,
+      ips: el('#asset-ips').value.split(',').map(x => x.trim()).filter(x => x),
+      owner_id: el('#asset-owner').value || null,
+      attributes: attributes,
+      poll_enabled: el('#asset-poll-enabled').checked,
+      poll_type: el('#asset-poll-type').value,
+      poll_username: el('#asset-poll-username').value || null,
+      poll_password: el('#asset-poll-password').value || null,
+      poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
+    };d);
     if (!r.ok && r.status !== 401) {
       throw new Error(`HTTP ${r.status}: ${r.statusText}`);
     }
@@ -390,6 +422,7 @@ const viewAsset = (id) => {
     console.log('Asset data:', a);
     const drawer = el('#drawer');
     const content = el('#asset-detail');
+    const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
     content.innerHTML = `
       <h3>${a.name}</h3>
       <div class="kv"><strong>Type:</strong> ${a.type}</div>
@@ -398,7 +431,7 @@ const viewAsset = (id) => {
       <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
       <div class="kv"><strong>Created:</strong> ${a.created_at}</div>
       <div class="kv"><strong>Updated:</strong> ${a.updated_at}</div>
-      <pre>${JSON.stringify(a.attributes, null, 2)}</pre>
+      ${hasAttributes ? `<div class="kv"><strong>Attributes:</strong></div><pre>${JSON.stringify(a.attributes, null, 2)}</pre>` : ''}
     `;
     drawer.classList.remove('hidden');
   }).catch(err => {
@@ -417,7 +450,10 @@ const editAsset = (id) => {
     el('#asset-mac').value = a.mac || '';
     el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
     el('#asset-owner').value = a.owner_id || '';
-    el('#asset-attributes').value = JSON.stringify(a.attributes, null, 2);
+    
+    // Handle attributes - only show if exists and has content
+    const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
+    el('#asset-attributes').value = Object.keys(attrs).length > 0 ? JSON.stringify(attrs, null, 2) : '';
     
     // Polling fields
     el('#asset-poll-enabled').checked = a.poll_enabled || false;
