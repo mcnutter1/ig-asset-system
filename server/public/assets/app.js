@@ -42,16 +42,19 @@ const setupAuthHandlers = () => {
     const password = el('#password').value;
 
     api('login', 'POST', { username, password }).then(r => {
-      if (r.success) {
+      if (r.ok && r.user) {
         el('#login-panel').classList.add('hidden');
         el('#main').classList.remove('hidden');
         el('#settings-btn').classList.remove('hidden');
         loadAssets();
         updatePollingStatus();
       } else {
-        el('#login-msg').textContent = 'Login failed: ' + r.message;
+        el('#login-msg').textContent = 'Login failed: ' + (r.error || 'Invalid credentials');
         el('#login-msg').style.color = '#ff6b6b';
       }
+    }).catch(err => {
+      el('#login-msg').textContent = 'Login failed: Network error';
+      el('#login-msg').style.color = '#ff6b6b';
     });
   };
 
