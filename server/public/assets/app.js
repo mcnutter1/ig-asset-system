@@ -412,12 +412,20 @@ const editAsset = (id) => {
   console.log('editAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
     console.log('Asset data for edit:', a);
+    
+    // Check if we got valid data
+    if (!a || !a.id) {
+      alert('Failed to load asset: Invalid response from server');
+      console.error('Invalid asset data:', a);
+      return;
+    }
+    
     el('#asset-id').value = a.id;
-    el('#asset-name').value = a.name;
-    el('#asset-type').value = a.type;
+    el('#asset-name').value = a.name || '';
+    el('#asset-type').value = a.type || '';
     el('#asset-mac').value = a.mac || '';
     el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
-    el('#asset-owner').value = a.owner_id || '';
+    el('#asset-owner').value = a.owner_id || a.owner_user_id || '';
     
     // Handle attributes - only show if exists and has content
     const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
@@ -503,7 +511,7 @@ const setupAllHandlers = () => {
       type: el('#asset-type').value,
       mac: el('#asset-mac').value || null,
       ips: el('#asset-ips').value.split(',').map(ip => ip.trim()).filter(ip => ip),
-      owner_id: el('#asset-owner').value || null,
+      owner_user_id: el('#asset-owner').value || null,
       attributes: attributes,
       poll_enabled: el('#asset-poll-enabled').checked,
       poll_type: el('#asset-poll-type').value,
@@ -514,7 +522,10 @@ const setupAllHandlers = () => {
     
     if (id) {
       // Update existing asset
+      console.log('Updating asset with ID:', id);
+      console.log('Update data:', {id, ...data});
       api('asset_update', 'POST', {id, ...data}).then(r => {
+        console.log('Update response:', r);
         if (r.success || r.ok) {
           el('#asset-modal').close();
           loadAssets();
@@ -522,11 +533,15 @@ const setupAllHandlers = () => {
           alert('Error: ' + (r.message || r.error));
         }
       }).catch(err => {
+        console.error('Update error:', err);
         alert('Failed to update asset: ' + err.message);
       });
     } else {
       // Create new asset
+      console.log('Creating new asset');
+      console.log('Create data:', data);
       api('asset_create', 'POST', data).then(r => {
+        console.log('Create response:', r);
         if (r.success || r.ok) {
           el('#asset-modal').close();
           loadAssets();
@@ -534,6 +549,7 @@ const setupAllHandlers = () => {
           alert('Error: ' + (r.message || r.error));
         }
       }).catch(err => {
+        console.error('Create error:', err);
         alert('Failed to create asset: ' + err.message);
       });
     }
