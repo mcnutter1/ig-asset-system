@@ -36,6 +36,47 @@ const api = (action, method = 'GET', body = null, timeout = 30000) => {
 const el = sel => document.querySelector(sel);
 const elAll = sel => document.querySelectorAll(sel);
 
+// ============= USER MANAGEMENT =============
+let usersCache = [];
+let currentOwnerFilter = '';
+
+const loadUsers = () => {
+  api('users').then(users => {
+    usersCache = users || [];
+    populateOwnerDropdowns();
+  }).catch(err => {
+    console.error('Failed to load users:', err);
+  });
+};
+
+const populateOwnerDropdowns = () => {
+  const ownerSelect = el('#asset-owner');
+  const filterSelect = el('#owner-filter');
+  
+  if (ownerSelect) {
+    ownerSelect.innerHTML = '<option value="">No Owner</option>' +
+      usersCache.map(u => {
+        const displayText = `${u.display_name || u.username} (${u.email || 'no email'})`;
+        return `<option value="${u.id}">${displayText}</option>`;
+      }).join('');
+  }
+  
+  if (filterSelect) {
+    filterSelect.innerHTML = '<option value="">All Assets</option>' +
+      usersCache.map(u => {
+        const displayText = `${u.display_name || u.username} (${u.email || 'no email'})`;
+        return `<option value="${u.id}">${displayText}</option>`;
+      }).join('');
+  }
+};
+
+const getOwnerDisplayName = (ownerId) => {
+  if (!ownerId) return '-';
+  const user = usersCache.find(u => u.id == ownerId);
+  if (!user) return `User #${ownerId}`;
+  return user.display_name || user.username;
+};
+
 // ============= SYSTEM STATUS =============
 const checkSystemStatus = () => {
   api('system_status').then(status => {
@@ -367,14 +408,26 @@ const loadAssets = () => {
   api('assets').then(assets => {
     const tbody = el('#asset-list');
     if (!assets || assets.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #888;">No assets found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888;">No assets found</td></tr>';
       return;
     }
     
-    tbody.innerHTML = assets.map(a => {
+    // Filter assets by owner if filter is set
+    let filteredAssets = assets;
+    if (currentOwnerFilter) {
+      filteredAssets = assets.filter(a => a.owner_user_id == currentOwnerFilter);
+    }
+    
+    if (filteredAssets.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888;">No assets found for selected owner</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = filteredAssets.map(a => {
       const ips = (a.ips || []).map(x => x.ip).join(', ') || '-';
       const statusColor = a.online_status === 'online' ? '#6dd17f' : '#ff6b6b';
       const lastSeen = a.updated_at ? new Date(a.updated_at).toLocaleString() : '-';
+      const ownerName = getOwnerDisplayName(a.owner_user_id);
       
       return `
         <tr>
@@ -382,6 +435,7 @@ const loadAssets = () => {
           <td>${a.type}</td>
           <td style="font-family: monospace; font-size: 0.9em;">${ips}</td>
           <td style="font-family: monospace; font-size: 0.9em;">${a.mac || '-'}</td>
+          <td>${ownerName}</td>
           <td><span style="color: ${statusColor};">● ${a.online_status}</span></td>
           <td style="font-size: 0.85em; color: #888;">${lastSeen}</td>
           <td style="white-space: nowrap;">
@@ -402,9 +456,11 @@ const viewAsset = (id) => {
     const drawer = el('#drawer');
     const content = el('#asset-detail');
     const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
+    const ownerName = getOwnerDisplayName(a.owner_user_id);
     content.innerHTML = `
       <h3>${a.name}</h3>
       <div class="kv"><strong>Type:</strong> ${a.type}</div>
+      <div class="kv"><strong>Owner:</strong> ${ownerName}</div>
       <div class="kv"><strong>MAC:</strong> ${a.mac || '-'}</div>
       <div class="kv"><strong>IPs:</strong> ${(a.ips || []).map(x => x.ip).join(', ') || '-'}</div>
       <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
@@ -436,7 +492,7 @@ const editAsset = (id) => {
     el('#asset-type').value = a.type || '';
     el('#asset-mac').value = a.mac || '';
     el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
-    el('#asset-owner').value = a.owner_id || a.owner_user_id || '';
+    el('#asset-owner').value = a.owner_user_id || '';
     
     // Handle attributes - only show if exists and has content
     const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
@@ -619,4 +675,14 @@ document.addEventListener('DOMContentLoaded', () => {
   checkSystemStatus();
   updatePollingStatus();
   setInterval(updatePollingStatus, 30000);
+  loadUsers(); // Load users for owner dropdowns
+  
+  // Setup owner filter handler
+  const ownerFilter = el('#owner-filter');
+  if (ownerFilter) {
+    ownerFilter.onchange = (e) => {
+      currentOwnerFilter = e.target.value;
+      loadAssets();
+    };
+  }
 });

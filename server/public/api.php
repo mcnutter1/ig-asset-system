@@ -74,7 +74,7 @@ switch ($action) {
     break;
 
   case 'users':
-    require_login(); require_role('admin');
+    require_login(); // Allow all logged-in users to see user list for asset ownership
     UserController::list();
     break;
 
