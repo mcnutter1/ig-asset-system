@@ -2,9 +2,9 @@
 -- This allows the poller to authenticate with the API
 
 -- Insert or update the poller agent
-INSERT INTO agents (id, name, platform, token, status, created_at, last_seen)
+-- Note: id is auto_increment, so we don't specify it
+INSERT INTO agents (name, platform, token, status, created_at, last_seen)
 VALUES (
-    'poller-agent-001',
     'poller',
     'linux',
     'POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',

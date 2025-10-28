@@ -171,8 +171,13 @@ class DatabasePoller:
             targets = []
             for asset in assets:
                 # Get primary IP (first one in the list)
-                ips = asset['ips'].split(',') if asset['ips'] else []
-                primary_ip = ips[0] if ips else None
+                ips_str = asset['ips']
+                self.log_to_db('debug', f"Asset {asset['name']}: raw ips from DB = '{ips_str}'", asset['name'])
+                
+                ips = ips_str.split(',') if ips_str else []
+                primary_ip = ips[0].strip() if ips else None
+                
+                self.log_to_db('debug', f"Asset {asset['name']}: parsed ips = {ips}, primary_ip = '{primary_ip}'", asset['name'])
                 
                 if not primary_ip:
                     self.log_to_db('warning', f"Asset {asset['name']} has polling enabled but no IP address", asset['name'])
@@ -189,6 +194,8 @@ class DatabasePoller:
                     'device_type': asset['type']
                 }
                 targets.append(target)
+                
+                self.log_to_db('debug', f"Asset {asset['name']}: created target with host='{target['host']}'", asset['name'])
             
             return targets
             
@@ -245,6 +252,7 @@ class DatabasePoller:
         password = target.get('password', '')
         
         info = {
+            "id": target.get('asset_id'),  # Include asset ID for updates
             "name": host,
             "type": "server",
             "ips": [host],
@@ -288,6 +296,7 @@ class DatabasePoller:
         """Probe Windows system (basic implementation)"""
         host = target['host']
         info = {
+            "id": target.get('asset_id'),  # Include asset ID for updates
             "name": host,
             "type": "workstation",
             "ips": [host],
@@ -308,6 +317,8 @@ class DatabasePoller:
         
         try:
             self.log_to_db('info', f"Pushing update for {asset.get('name', 'unknown')}: {url}", asset.get('name'))
+            self.log_to_db('debug', f"Payload: {payload}", asset.get('name'))
+            
             response = requests.post(url, json=payload, timeout=self.poller_config['timeout'])
             
             self.log_to_db('info', f"API Response Status: {response.status_code}", asset.get('name'))
@@ -325,7 +336,8 @@ class DatabasePoller:
                     error_data = response.json()
                     self.log_to_db('error', f"Failed to update asset (HTTP {response.status_code}): {error_data}", asset.get('name'))
                 except:
-                    self.log_to_db('error', f"Failed to update asset (HTTP {response.status_code}): {response.text}", asset.get('name'))
+                    error_text = response.text[:500] if response.text else '(empty response)'
+                    self.log_to_db('error', f"Failed to update asset (HTTP {response.status_code}): {error_text}", asset.get('name'))
                     
         except requests.exceptions.Timeout:
             self.log_to_db('error', f"Timeout pushing update to API (timeout={self.poller_config['timeout']}s)", asset.get('name'))
