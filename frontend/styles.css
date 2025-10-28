@@ -17,3 +17,15 @@ button:hover{filter:brightness(1.1)}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #2a3e6d;font-size:11px;margin-right:4px}
 .flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 pre{white-space:pre-wrap;word-wrap:break-word;background:#0e1730;border:1px solid #1e2a4a;border-radius:12px;padding:10px}
+label{display:block;margin:12px 0;font-size:14px}
+label input{margin-top:4px}
+#admin-controls{display:flex;gap:8px}
+#admin-controls button{width:auto;padding:8px 12px;margin:0}
+#ldap-status{margin-top:12px;padding:8px;border-radius:8px;font-size:14px}
+#ldap-status.success{background:#1a4d3a;border:1px solid #2d6e4d;color:#6dd17f}
+#ldap-status.error{background:#4d1a1a;border:1px solid #6e2d2d;color:#d16d6d}
+.bootstrap-warning{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000}
+.bootstrap-content{background:#111b36;border:2px solid #ff6b6b;border-radius:12px;padding:24px;max-width:500px;text-align:center}
+.bootstrap-content h2{color:#ff6b6b;margin-top:0}
+.bootstrap-content pre{background:#0e1730;padding:12px;border-radius:8px;margin:16px 0}
+.bootstrap-content code{color:#6dd17f;font-family:monospace}

@@ -8,9 +8,23 @@
 </head>
 <body>
   <div id="app">
+    <div id="bootstrap-warning" class="bootstrap-warning hidden">
+      <div class="bootstrap-content">
+        <h2>⚠️ System Not Initialized</h2>
+        <p>The Asset Tracker database has not been set up yet.</p>
+        <p>Please run the bootstrap script to initialize the system:</p>
+        <pre><code>./bootstrap.sh</code></pre>
+        <p>After running bootstrap, refresh this page.</p>
+        <button onclick="location.reload()">Refresh Page</button>
+      </div>
+    </div>
+
     <header>
       <h1>Asset Tracker</h1>
       <div id="user-info"></div>
+      <div id="admin-controls" class="hidden">
+        <button id="settings-btn">Settings</button>
+      </div>
     </header>
 
     <section id="login-panel" class="card">
@@ -35,6 +49,48 @@
           <button class="close">&times;</button>
           <div id="asset-detail"></div>
         </div>
+      </div>
+    </section>
+
+    <section id="settings" class="hidden">
+      <div class="card">
+        <h2>LDAP Settings</h2>
+        <form id="ldap-form">
+          <label>
+            <input type="checkbox" id="ldap-enabled"> Enable LDAP Authentication
+          </label>
+          <label>
+            LDAP Host:
+            <input type="text" id="ldap-host" placeholder="ldap://ad.example.com">
+          </label>
+          <label>
+            Port:
+            <input type="number" id="ldap-port" value="389">
+          </label>
+          <label>
+            Bind DN:
+            <input type="text" id="ldap-bind-dn" placeholder="CN=ldap-reader,OU=Service Accounts,DC=example,DC=com">
+          </label>
+          <label>
+            Bind Password:
+            <input type="password" id="ldap-bind-password">
+          </label>
+          <label>
+            Base DN:
+            <input type="text" id="ldap-base-dn" placeholder="DC=example,DC=com">
+          </label>
+          <label>
+            User Attribute:
+            <input type="text" id="ldap-user-attr" value="sAMAccountName">
+          </label>
+          <div class="flex">
+            <button type="submit">Save Settings</button>
+            <button type="button" id="test-ldap">Test Connection</button>
+            <button type="button" id="import-ldap">Import Users</button>
+            <button type="button" id="back-to-main">Back</button>
+          </div>
+          <div id="ldap-status"></div>
+        </form>
       </div>
     </section>
   </div>

@@ -13,6 +13,27 @@ const list = el('#asset-list');
 const drawer = el('#drawer');
 const detail = el('#asset-detail');
 
+// Check system status on page load
+const checkSystemStatus = () => {
+  api('system_status').then((status) => {
+    if (!status.bootstrapped) {
+      el('#bootstrap-warning').classList.remove('hidden');
+      el('#login-panel').classList.add('hidden');
+      el('#main').classList.add('hidden');
+      el('#settings').classList.add('hidden');
+    }
+  }).catch((error) => {
+    // If API fails completely, show bootstrap warning
+    el('#bootstrap-warning').classList.remove('hidden');
+    el('#login-panel').classList.add('hidden');
+    el('#main').classList.add('hidden');
+    el('#settings').classList.add('hidden');
+  });
+};
+
+// Initialize system status check
+checkSystemStatus();
+
 const renderAssetCard = (a) => {
   const ips = (a.ips||[]).map(x=>x.ip).join(', ');
   return `<div class="asset">
@@ -83,6 +104,12 @@ el('#login-btn').onclick = () => {
     el('#login-panel').classList.add('hidden');
     el('#main').classList.remove('hidden');
     el('#user-info').textContent = r.user.display_name || r.user.username;
+    
+    // Show admin controls for admin users
+    if (r.user.role === 'admin') {
+      el('#admin-controls').classList.remove('hidden');
+    }
+    
     load();
   }).catch(()=> el('#login-msg').textContent = 'Login failed');
 };
@@ -94,3 +121,81 @@ el('#new-asset').onclick = () => {
 };
 el('#search').addEventListener('keydown', (e)=>{ if (e.key==='Enter') load(); });
 el('.close').onclick = ()=> drawer.classList.add('hidden');
+
+// Settings functionality
+el('#settings-btn').onclick = () => {
+  el('#main').classList.add('hidden');
+  el('#settings').classList.remove('hidden');
+  loadLdapSettings();
+};
+
+el('#back-to-main').onclick = () => {
+  el('#settings').classList.add('hidden');
+  el('#main').classList.remove('hidden');
+};
+
+const loadLdapSettings = () => {
+  api('settings_get&category=ldap').then((settings) => {
+    el('#ldap-enabled').checked = settings.enabled?.value === 'true';
+    el('#ldap-host').value = settings.host?.value || '';
+    el('#ldap-port').value = settings.port?.value || '389';
+    el('#ldap-bind-dn').value = settings.bind_dn?.value || '';
+    el('#ldap-bind-password').value = settings.bind_password?.value || '';
+    el('#ldap-base-dn').value = settings.base_dn?.value || '';
+    el('#ldap-user-attr').value = settings.user_attr?.value || 'sAMAccountName';
+  });
+};
+
+el('#ldap-form').onsubmit = (e) => {
+  e.preventDefault();
+  const settings = {
+    enabled: el('#ldap-enabled').checked ? 'true' : 'false',
+    host: el('#ldap-host').value,
+    port: el('#ldap-port').value,
+    bind_dn: el('#ldap-bind-dn').value,
+    bind_password: el('#ldap-bind-password').value,
+    base_dn: el('#ldap-base-dn').value,
+    user_attr: el('#ldap-user-attr').value
+  };
+  
+  api('settings_update', 'POST', { category: 'ldap', settings }).then((r) => {
+    if (r.success) {
+      showLdapStatus('Settings saved successfully', 'success');
+    } else {
+      showLdapStatus('Failed to save settings', 'error');
+    }
+  });
+};
+
+el('#test-ldap').onclick = () => {
+  const settings = {
+    host: { value: el('#ldap-host').value },
+    port: { value: el('#ldap-port').value },
+    bind_dn: { value: el('#ldap-bind-dn').value },
+    bind_password: { value: el('#ldap-bind-password').value },
+    base_dn: { value: el('#ldap-base-dn').value },
+    user_attr: { value: el('#ldap-user-attr').value }
+  };
+  
+  api('ldap_test', 'POST', { settings }).then((result) => {
+    showLdapStatus(result.message, result.success ? 'success' : 'error');
+  });
+};
+
+el('#import-ldap').onclick = () => {
+  if (!confirm('Import users from LDAP? This may take a while.')) return;
+  
+  api('ldap_import', 'POST', {}).then((result) => {
+    showLdapStatus(result.message, result.success ? 'success' : 'error');
+  });
+};
+
+const showLdapStatus = (message, type) => {
+  const status = el('#ldap-status');
+  status.textContent = message;
+  status.className = type;
+  setTimeout(() => {
+    status.textContent = '';
+    status.className = '';
+  }, 5000);
+};

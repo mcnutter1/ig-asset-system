@@ -6,6 +6,8 @@ require_once __DIR__ . '/../src/auth.php';
 require_once __DIR__ . '/../src/AssetController.php';
 require_once __DIR__ . '/../src/AgentController.php';
 require_once __DIR__ . '/../src/UserController.php';
+require_once __DIR__ . '/../src/SettingsController.php';
+require_once __DIR__ . '/../src/SystemController.php';
 
 cors_headers();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
@@ -102,6 +104,45 @@ switch ($action) {
       'message' => 'Fetch the Windows C# agent from the repo and set the token in app.config or ENV.',
       'token' => $_GET['token'] ?? ''
     ]);
+    break;
+
+  case 'settings_get':
+    require_login(); require_role('admin');
+    $category = $_GET['category'] ?? null;
+    echo json_encode(SettingsController::getSettings($category));
+    break;
+
+  case 'settings_update':
+    require_login(); require_role('admin');
+    $in = json_input();
+    $category = $in['category'] ?? '';
+    $settings = $in['settings'] ?? [];
+    $success = SettingsController::updateSettings($category, $settings);
+    echo json_encode(['success' => $success]);
+    break;
+
+  case 'ldap_test':
+    require_login(); require_role('admin');
+    $in = json_input();
+    $result = SettingsController::testLdapConnection($in['settings'] ?? null);
+    echo json_encode($result);
+    break;
+
+  case 'ldap_import':
+    require_login(); require_role('admin');
+    $in = json_input();
+    $filter = $in['filter'] ?? null;
+    $result = SettingsController::importLdapUsers($filter);
+    echo json_encode($result);
+    break;
+
+  case 'system_status':
+    echo json_encode(SystemController::getBootstrapStatus());
+    break;
+
+  case 'system_health':
+    require_login(); require_role('admin');
+    echo json_encode(SystemController::checkSystemHealth());
     break;
 
   default:

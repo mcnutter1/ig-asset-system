@@ -16,16 +16,8 @@ return [
     'csrf_salt' => 'change-me',
     'token_salt' => 'change-me-too'
   ],
-  'ldap' => [
-    'enabled' => false,
-    'host' => 'ldap://ad.example.com',
-    'port' => 389,
-    'bind_dn' => 'CN=ldap-reader,OU=Service Accounts,DC=example,DC=com',
-    'bind_password' => 'REDACTED',
-    'base_dn' => 'DC=example,DC=com',
-    'user_attr' => 'sAMAccountName'
-  ],
   'cors' => [
     'enabled' => true,
     'origins' => ['*']
-  ];
+  ]
+];
