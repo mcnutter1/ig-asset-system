@@ -54,61 +54,8 @@ const checkSystemStatus = () => {
   });
 };
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', () => {
-  checkSystemStatus();
-});
-
-// Poller configuration
-const showPollerConfig = () => {
-  api('poller_config').then(config => {
-    const form = `
-      <form id="poller-config-form">
-        <div class="form-group">
-          <label>Polling Interval (seconds):</label>
-          <input type="number" name="interval" value="${config.interval || 30}" min="5" max="3600">
-        </div>
-        <div class="form-group">
-          <label>Connection Timeout (seconds):</label>
-          <input type="number" name="timeout" value="${config.timeout || 10}" min="1" max="60">
-        </div>
-        <div class="form-group">
-          <label>Ping Timeout (seconds):</label>
-          <input type="number" name="ping_timeout" value="${config.ping_timeout || 1}" min="1" max="10">
-        </div>
-        <div class="form-group">
-          <label>API URL:</label>
-          <input type="url" name="api_url" value="${config.api_url || ''}" style="width: 100%;">
-        </div>
-        <div class="form-group">
-          <label>API Key:</label>
-          <input type="text" name="api_key" value="${config.api_key || ''}" style="width: 100%;">
-        </div>
-        <div style="margin-top: 20px;">
-          <button type="submit">Save Configuration</button>
-          <button type="button" onclick="hideModal()">Cancel</button>
-        </div>
-      </form>
-    `;
-    
-    showModal('Poller Configuration', form);
-    
-    el('#poller-config-form').onsubmit = (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const configData = Object.fromEntries(formData);
-      
-      api('poller_config_update', 'POST', configData).then(response => {
-        if (response.success) {
-          hideModal();
-          alert('Poller configuration updated successfully!');
-        } else {
-          alert('Failed to update configuration: ' + response.message);
-        }
-      });
-    };
-  });
-};
+// Initialize system status check
+checkSystemStatus();
 
 const renderAssetCard = (a) => {
   const ips = (a.ips||[]).map(x=>x.ip).join(', ');
@@ -274,4 +221,331 @@ const showLdapStatus = (message, type) => {
     status.textContent = '';
     status.className = '';
   }, 5000);
+};
+
+// Modal management
+const showModal = (title, content) => {
+  el('#modal-title').textContent = title;
+  el('#modal-content').innerHTML = content;
+  el('#modal').classList.remove('hidden');
+};
+
+const hideModal = () => {
+  el('#modal').classList.add('hidden');
+};
+
+// Modern settings management
+const showSettings = () => {
+  el('#main').classList.add('hidden');
+  el('#settings').classList.remove('hidden');
+  loadModernSettingsContent();
+};
+
+const hideSettings = () => {
+  el('#settings').classList.add('hidden');
+  el('#main').classList.remove('hidden');
+};
+
+const loadModernSettingsContent = () => {
+  const content = `
+    <div class="settings-nav">
+      <button class="settings-tab active" data-tab="ldap">LDAP Settings</button>
+      <button class="settings-tab" data-tab="poller">Polling Configuration</button>
+      <button class="settings-tab" data-tab="system">System Settings</button>
+    </div>
+    <div class="settings-content">
+      <div id="ldap-settings" class="settings-panel active">
+        <h3>LDAP Configuration</h3>
+        <form id="modern-ldap-form">
+          <div class="form-group">
+            <label>LDAP Server:</label>
+            <input type="text" id="modern-ldap-server" placeholder="ldap://domain.com:389">
+          </div>
+          <div class="form-group">
+            <label>Base DN:</label>
+            <input type="text" id="modern-ldap-base-dn" placeholder="dc=domain,dc=com">
+          </div>
+          <div class="form-group">
+            <label>Bind DN:</label>
+            <input type="text" id="modern-ldap-bind-dn" placeholder="cn=admin,dc=domain,dc=com">
+          </div>
+          <div class="form-group">
+            <label>Bind Password:</label>
+            <input type="password" id="modern-ldap-bind-password">
+          </div>
+          <div class="form-group">
+            <label>User Filter:</label>
+            <input type="text" id="modern-ldap-user-filter" placeholder="(objectClass=person)">
+          </div>
+          <div class="form-group">
+            <label>Username Attribute:</label>
+            <input type="text" id="modern-ldap-user-attr" placeholder="sAMAccountName">
+          </div>
+          <div class="form-actions">
+            <button type="button" onclick="testModernLdapConnection()">Test Connection</button>
+            <button type="button" onclick="importModernLdapUsers()">Import Users</button>
+            <button type="submit">Save LDAP Settings</button>
+          </div>
+          <div id="modern-ldap-status" class="status-message"></div>
+        </form>
+      </div>
+      
+      <div id="poller-settings" class="settings-panel">
+        <h3>Polling Configuration</h3>
+        <form id="poller-form">
+          <div class="form-group">
+            <label>Polling Interval (seconds):</label>
+            <input type="number" id="poller-interval" min="5" max="3600" value="30">
+            <small>How often to poll targets (5-3600 seconds)</small>
+          </div>
+          <div class="form-group">
+            <label>Connection Timeout (seconds):</label>
+            <input type="number" id="poller-timeout" min="1" max="60" value="10">
+            <small>SSH/HTTP connection timeout (1-60 seconds)</small>
+          </div>
+          <div class="form-group">
+            <label>Ping Timeout (seconds):</label>
+            <input type="number" id="poller-ping-timeout" min="1" max="10" value="1">
+            <small>Network ping timeout (1-10 seconds)</small>
+          </div>
+          <div class="form-group">
+            <label>API URL:</label>
+            <input type="url" id="poller-api-url" placeholder="http://localhost:8080/api.php">
+            <small>API endpoint for poller to send updates</small>
+          </div>
+          <div class="form-group">
+            <label>API Key:</label>
+            <input type="text" id="poller-api-key" placeholder="Enter API authentication key">
+            <small>Authentication key for API access</small>
+          </div>
+          <div class="form-actions">
+            <button type="submit">Save Polling Settings</button>
+          </div>
+          <div id="poller-config-status" class="status-message"></div>
+        </form>
+        
+        <div class="polling-control">
+          <h4>Polling Control</h4>
+          <div class="control-buttons">
+            <button id="start-polling-settings" onclick="startPollingFromSettings()">Start Polling</button>
+            <button id="stop-polling-settings" onclick="stopPollingFromSettings()">Stop Polling</button>
+            <span id="polling-status-settings">Status: Unknown</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="system-settings" class="settings-panel">
+        <h3>System Settings</h3>
+        <div class="system-info">
+          <h4>System Status</h4>
+          <div id="system-health-display"></div>
+        </div>
+        <div class="system-actions">
+          <button onclick="checkSystemHealth()">Check System Health</button>
+          <button onclick="downloadSystemLogs()">Download Logs</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  el('#settings-container').innerHTML = content;
+  
+  // Load current settings
+  loadModernLdapSettings();
+  loadPollerConfigSettings();
+  updatePollingStatusInSettings();
+  
+  // Setup tab switching
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.onclick = () => switchSettingsTab(tab.dataset.tab);
+  });
+};
+
+const switchSettingsTab = (tabName) => {
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === tabName);
+  });
+  
+  document.querySelectorAll('.settings-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === tabName + '-settings');
+  });
+};
+
+// Modern LDAP functions
+const loadModernLdapSettings = () => {
+  api('settings_get&category=ldap').then(settings => {
+    if (settings) {
+      el('#modern-ldap-server').value = settings.host?.value || '';
+      el('#modern-ldap-base-dn').value = settings.base_dn?.value || '';
+      el('#modern-ldap-bind-dn').value = settings.bind_dn?.value || '';
+      el('#modern-ldap-bind-password').value = settings.bind_password?.value || '';
+      el('#modern-ldap-user-filter').value = settings.user_filter?.value || '';
+      el('#modern-ldap-user-attr').value = settings.user_attr?.value || '';
+    }
+  });
+  
+  const form = el('#modern-ldap-form');
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      saveModernLdapSettings();
+    };
+  }
+};
+
+const saveModernLdapSettings = () => {
+  const settings = {
+    host: el('#modern-ldap-server').value,
+    base_dn: el('#modern-ldap-base-dn').value,
+    bind_dn: el('#modern-ldap-bind-dn').value,
+    bind_password: el('#modern-ldap-bind-password').value,
+    user_filter: el('#modern-ldap-user-filter').value,
+    user_attr: el('#modern-ldap-user-attr').value
+  };
+  
+  api('settings_update', 'POST', { category: 'ldap', settings }).then(response => {
+    showStatusMessage('modern-ldap-status', response.success ? 'LDAP settings saved successfully' : 'Failed to save LDAP settings', response.success ? 'success' : 'error');
+  });
+};
+
+const testModernLdapConnection = () => {
+  const settings = {
+    host: { value: el('#modern-ldap-server').value },
+    base_dn: { value: el('#modern-ldap-base-dn').value },
+    bind_dn: { value: el('#modern-ldap-bind-dn').value },
+    bind_password: { value: el('#modern-ldap-bind-password').value },
+    user_filter: { value: el('#modern-ldap-user-filter').value },
+    user_attr: { value: el('#modern-ldap-user-attr').value }
+  };
+  
+  showStatusMessage('modern-ldap-status', 'Testing LDAP connection...', 'info');
+  api('ldap_test', 'POST', { settings }).then(result => {
+    showStatusMessage('modern-ldap-status', result.message, result.success ? 'success' : 'error');
+  });
+};
+
+const importModernLdapUsers = () => {
+  if (!confirm('Import users from LDAP? This may take a while.')) return;
+  
+  showStatusMessage('modern-ldap-status', 'Importing LDAP users...', 'info');
+  api('ldap_import', 'POST', {}).then(result => {
+    showStatusMessage('modern-ldap-status', result.message, result.success ? 'success' : 'error');
+  });
+};
+
+// Poller configuration functions
+const loadPollerConfigSettings = () => {
+  api('poller_config').then(config => {
+    el('#poller-interval').value = config.interval || 30;
+    el('#poller-timeout').value = config.timeout || 10;
+    el('#poller-ping-timeout').value = config.ping_timeout || 1;
+    el('#poller-api-url').value = config.api_url || '';
+    el('#poller-api-key').value = config.api_key || '';
+  });
+  
+  const form = el('#poller-form');
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      savePollerConfigSettings();
+    };
+  }
+};
+
+const savePollerConfigSettings = () => {
+  const config = {
+    interval: el('#poller-interval').value,
+    timeout: el('#poller-timeout').value,
+    ping_timeout: el('#poller-ping-timeout').value,
+    api_url: el('#poller-api-url').value,
+    api_key: el('#poller-api-key').value
+  };
+  
+  api('poller_config_update', 'POST', config).then(response => {
+    showStatusMessage('poller-config-status', response.success ? 'Polling settings saved successfully' : 'Failed to save polling settings', response.success ? 'success' : 'error');
+  });
+};
+
+const startPollingFromSettings = () => {
+  api('poller_start', 'POST').then(response => {
+    if (response.success) {
+      updatePollingStatusInSettings();
+    } else {
+      showStatusMessage('poller-config-status', 'Failed to start poller: ' + response.message, 'error');
+    }
+  });
+};
+
+const stopPollingFromSettings = () => {
+  api('poller_stop', 'POST').then(response => {
+    if (response.success) {
+      updatePollingStatusInSettings();
+    } else {
+      showStatusMessage('poller-config-status', 'Failed to stop poller: ' + response.message, 'error');
+    }
+  });
+};
+
+const updatePollingStatusInSettings = () => {
+  api('poller_status').then(status => {
+    const statusElSettings = el('#polling-status-settings');
+    const startBtnSettings = el('#start-polling-settings');
+    const stopBtnSettings = el('#stop-polling-settings');
+    
+    const statusText = status.status === 'running' 
+      ? `Status: Running (${status.targets_count} targets)`
+      : `Status: Stopped (${status.targets_count} targets)`;
+    const statusColor = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
+    
+    if (statusElSettings) {
+      statusElSettings.textContent = statusText;
+      statusElSettings.style.color = statusColor;
+    }
+    
+    const isRunning = status.status === 'running';
+    if (startBtnSettings) startBtnSettings.disabled = isRunning;
+    if (stopBtnSettings) stopBtnSettings.disabled = !isRunning;
+    
+    if (status.last_run && statusElSettings) {
+      statusElSettings.title = `Last run: ${status.last_run}`;
+    }
+  }).catch(() => {
+    const statusElSettings = el('#polling-status-settings');
+    if (statusElSettings) {
+      statusElSettings.textContent = 'Status: Error';
+      statusElSettings.style.color = '#ff6b6b';
+    }
+  });
+};
+
+// System health functions
+const checkSystemHealth = () => {
+  api('system_health').then(health => {
+    const healthEl = el('#system-health-display');
+    if (healthEl) {
+      healthEl.innerHTML = `
+        <div class="health-item">Database: ${health.database ? '✅ Connected' : '❌ Error'}</div>
+        <div class="health-item">PHP Version: ${health.php_version || 'Unknown'}</div>
+        <div class="health-item">Disk Space: ${health.disk_free || 'Unknown'}</div>
+        <div class="health-item">Memory Usage: ${health.memory_usage || 'Unknown'}</div>
+      `;
+    }
+  });
+};
+
+const downloadSystemLogs = () => {
+  alert('Log download functionality would be implemented here');
+};
+
+// Utility function for status messages
+const showStatusMessage = (elementId, message, type) => {
+  const statusEl = el('#' + elementId);
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = 'status-message ' + type;
+    setTimeout(() => {
+      statusEl.textContent = '';
+      statusEl.className = 'status-message';
+    }, 5000);
+  }
 };
