@@ -160,6 +160,73 @@ const setupSettingsListeners = () => {
     api('poller_stop', 'POST').then(() => updatePollingStatusInSettings());
   };
 
+  // Polling Log Stream
+  let logEventSource = null;
+
+  el('#start-log-stream').onclick = () => {
+    if (logEventSource) {
+      return; // Already streaming
+    }
+
+    const logsContainer = el('#poller-logs');
+    logsContainer.innerHTML = '<div style="color: #ffff00;">Connecting to log stream...</div>';
+
+    logEventSource = new EventSource('/api.php?action=poller_logs_stream');
+    
+    logEventSource.onmessage = (event) => {
+      const log = JSON.parse(event.data);
+      const logLine = document.createElement('div');
+      
+      // Color code by level
+      let color = '#0f0'; // green for info
+      if (log.level === 'error') color = '#ff6b6b';
+      if (log.level === 'warning') color = '#ffaa00';
+      if (log.level === 'success') color = '#6dd17f';
+      
+      logLine.style.color = color;
+      logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
+      
+      logsContainer.appendChild(logLine);
+      
+      // Auto-scroll to bottom
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+      
+      // Keep only last 200 lines
+      while (logsContainer.children.length > 200) {
+        logsContainer.removeChild(logsContainer.firstChild);
+      }
+    };
+    
+    logEventSource.onerror = () => {
+      const errorLine = document.createElement('div');
+      errorLine.style.color = '#ff6b6b';
+      errorLine.textContent = `[ERROR] Log stream disconnected. Reconnecting...`;
+      logsContainer.appendChild(errorLine);
+    };
+
+    el('#start-log-stream').disabled = true;
+    el('#stop-log-stream').disabled = false;
+  };
+
+  el('#stop-log-stream').onclick = () => {
+    if (logEventSource) {
+      logEventSource.close();
+      logEventSource = null;
+      el('#start-log-stream').disabled = false;
+      el('#stop-log-stream').disabled = true;
+      
+      const logsContainer = el('#poller-logs');
+      const stopLine = document.createElement('div');
+      stopLine.style.color = '#ffaa00';
+      stopLine.textContent = `[STOPPED] Log stream disconnected by user`;
+      logsContainer.appendChild(stopLine);
+    }
+  };
+
+  el('#clear-logs').onclick = () => {
+    el('#poller-logs').innerHTML = '';
+  };
+
   el('#check-health-btn').onclick = checkSystemHealth;
 
   elAll('.settings-tab').forEach(tab => {
@@ -244,26 +311,38 @@ const checkSystemHealth = () => {
 // ============= ASSET MANAGEMENT =============
 const loadAssets = () => {
   api('assets').then(assets => {
-    const grid = el('#asset-list');
-    grid.innerHTML = assets.map(a => `
-      <div class="asset-card">
-        <h4>${a.name} <span class="badge">${a.type}</span></h4>
-        <div class="kv"><strong>ID:</strong> <span>${a.id}</span></div>
-        <div class="kv"><strong>MAC:</strong> <span>${a.mac || '-'}</span></div>
-        <div class="kv"><strong>IPs:</strong> <span>${(a.ips || []).map(x => x.ip).join(', ') || '-'}</span></div>
-        <div class="kv"><strong>Status:</strong> <span class="badge">${a.online_status}</span></div>
-        <div style="display: flex; gap: 10px; margin-top: 12px;">
-          <button onclick="viewAsset(${a.id})" class="secondary" style="width: auto; padding: 6px 12px;">View</button>
-          <button onclick="editAsset(${a.id})" class="secondary" style="width: auto; padding: 6px 12px;">Edit</button>
-          <button onclick="deleteAsset(${a.id})" class="contrast" style="width: auto; padding: 6px 12px;">Delete</button>
-        </div>
-      </div>
-    `).join('');
+    const tbody = el('#asset-list');
+    if (!assets || assets.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #888;">No assets found</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = assets.map(a => {
+      const ips = (a.ips || []).map(x => x.ip).join(', ') || '-';
+      const statusColor = a.online_status === 'online' ? '#6dd17f' : '#ff6b6b';
+      const lastSeen = a.updated_at ? new Date(a.updated_at).toLocaleString() : '-';
+      
+      return `
+        <tr>
+          <td><strong>${a.name}</strong></td>
+          <td>${a.type}</td>
+          <td style="font-family: monospace; font-size: 0.9em;">${ips}</td>
+          <td style="font-family: monospace; font-size: 0.9em;">${a.mac || '-'}</td>
+          <td><span style="color: ${statusColor};">● ${a.online_status}</span></td>
+          <td style="font-size: 0.85em; color: #888;">${lastSeen}</td>
+          <td style="white-space: nowrap;">
+            <button onclick="viewAsset(${a.id})" class="secondary" style="padding: 4px 12px; margin-right: 5px;">View</button>
+            <button onclick="editAsset(${a.id})" class="secondary" style="padding: 4px 12px; margin-right: 5px;">Edit</button>
+            <button onclick="deleteAsset(${a.id})" class="contrast" style="padding: 4px 12px;">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   });
 };
 
 const viewAsset = (id) => {
-  api(`assets/${id}`).then(a => {
+  api(`asset_get&id=${id}`).then(a => {
     const drawer = el('#drawer');
     const content = el('#asset-detail');
     content.innerHTML = `
@@ -281,7 +360,7 @@ const viewAsset = (id) => {
 };
 
 const editAsset = (id) => {
-  api(`assets/${id}`).then(a => {
+  api(`asset_get&id=${id}`).then(a => {
     el('#asset-id').value = a.id;
     el('#asset-name').value = a.name;
     el('#asset-type').value = a.type;
@@ -295,12 +374,17 @@ const editAsset = (id) => {
 };
 
 const deleteAsset = (id) => {
-  api(`assets/${id}`).then(a => {
+  api(`asset_get&id=${id}`).then(a => {
     el('#delete-asset-name').textContent = a.name;
     el('#delete-modal').dataset.assetId = id;
     el('#delete-modal').showModal();
   });
 };
+
+// Make functions globally accessible for onclick handlers
+window.viewAsset = viewAsset;
+window.editAsset = editAsset;
+window.deleteAsset = deleteAsset;
 
 // ============= EVENT HANDLER INITIALIZATION =============
 const setupAllHandlers = () => {

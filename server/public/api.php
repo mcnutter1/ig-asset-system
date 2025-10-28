@@ -189,6 +189,40 @@ switch ($action) {
     echo json_encode(PollerController::removeTarget($index));
     break;
 
+  case 'poller_logs':
+    require_login();
+    $since = $_GET['since'] ?? null;
+    echo json_encode(PollerController::getLogs($since));
+    break;
+
+  case 'poller_logs_stream':
+    require_login();
+    // Server-Sent Events endpoint for live log streaming
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('Connection: keep-alive');
+    header('X-Accel-Buffering: no'); // Disable nginx buffering
+    
+    $lastId = intval($_GET['lastEventId'] ?? 0);
+    
+    while (true) {
+      $logs = PollerController::getLogs($lastId);
+      
+      foreach ($logs as $log) {
+        echo "id: {$log['id']}\n";
+        echo "data: " . json_encode($log) . "\n\n";
+        $lastId = max($lastId, $log['id']);
+        flush();
+      }
+      
+      // Send keep-alive comment
+      echo ": keepalive\n\n";
+      flush();
+      
+      sleep(2);
+    }
+    break;
+
   default:
     echo json_encode(['error'=>'unknown_action']);
 }

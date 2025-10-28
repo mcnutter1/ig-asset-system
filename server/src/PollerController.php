@@ -207,4 +207,62 @@ class PollerController {
       return false;
     }
   }
+  
+  public static function getLogs($since = null) {
+    try {
+      $pdo = DB::conn();
+      
+      if ($since) {
+        $stmt = $pdo->prepare("
+          SELECT id, timestamp, level, message, target 
+          FROM poller_logs 
+          WHERE id > ? 
+          ORDER BY id ASC 
+          LIMIT 100
+        ");
+        $stmt->execute([$since]);
+      } else {
+        $stmt = $pdo->prepare("
+          SELECT id, timestamp, level, message, target 
+          FROM poller_logs 
+          ORDER BY id DESC 
+          LIMIT 100
+        ");
+        $stmt->execute();
+      }
+      
+      return $stmt->fetchAll(PDO::FETCH_ASSOC);
+      
+    } catch (Exception $e) {
+      return [];
+    }
+  }
+  
+  public static function addLog($level, $message, $target = null) {
+    try {
+      $pdo = DB::conn();
+      
+      $stmt = $pdo->prepare("
+        INSERT INTO poller_logs (level, message, target) 
+        VALUES (?, ?, ?)
+      ");
+      $stmt->execute([$level, $message, $target]);
+      
+      // Clean up old logs (keep last 1000)
+      $stmt = $pdo->prepare("
+        DELETE FROM poller_logs 
+        WHERE id < (
+          SELECT id FROM (
+            SELECT id FROM poller_logs ORDER BY id DESC LIMIT 1 OFFSET 1000
+          ) AS tmp
+        )
+      ");
+      $stmt->execute();
+      
+      return true;
+      
+    } catch (Exception $e) {
+      return false;
+    }
+  }
 }

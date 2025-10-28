@@ -66,8 +66,23 @@
         </ul>
       </nav>
 
-      <!-- Asset Grid -->
-      <div id="asset-list" class="asset-grid"></div>
+      <!-- Asset Table -->
+      <div style="overflow-x: auto;">
+        <table id="asset-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>IP Addresses</th>
+              <th>MAC Address</th>
+              <th>Status</th>
+              <th>Last Seen</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="asset-list"></tbody>
+        </table>
+      </div>
 
       <!-- Asset Detail Drawer -->
       <div id="drawer" class="drawer hidden">
@@ -214,6 +229,24 @@
               <button type="button" id="stop-polling-settings" class="contrast">⏸ Stop Polling</button>
               <span id="polling-status-settings" style="align-self: center; padding: 0 10px;"></span>
             </div>
+
+            <h4 style="margin-top: 30px;">Live Polling Logs</h4>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+              <button type="button" id="start-log-stream" class="success">▶ Start Log Stream</button>
+              <button type="button" id="stop-log-stream" class="contrast">⏸ Stop Log Stream</button>
+              <button type="button" id="clear-logs">Clear Logs</button>
+            </div>
+            <div id="poller-logs" style="
+              background: #000; 
+              color: #0f0; 
+              font-family: 'Courier New', monospace; 
+              font-size: 12px; 
+              padding: 10px; 
+              height: 400px; 
+              overflow-y: auto; 
+              border: 1px solid var(--muted-border-color);
+              border-radius: 4px;
+            "></div>
           </form>
         </article>
 

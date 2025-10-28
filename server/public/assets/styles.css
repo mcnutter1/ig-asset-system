@@ -96,57 +96,45 @@ nav button {
 }
 
 /* Asset Grid */
-.asset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  padding: 16px;
-  flex: 1;
-  overflow-y: auto;
+/* Asset Table */
+#asset-table {
+  width: 100%;
+  margin: 16px 0;
+  border-collapse: collapse;
 }
 
-.asset-card {
+#asset-table thead {
   background: #0e1730;
-  border: 1px solid #1e2a4a;
-  border-radius: 12px;
+  border-bottom: 2px solid #4a90e2;
+}
+
+#asset-table th {
   padding: 12px;
-  transition: 0.2s ease;
-}
-
-.asset-card:hover {
-  border-color: #4a90e2;
-  box-shadow: 0 0 8px rgba(74, 144, 226, 0.2);
-}
-
-.asset-card h4 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-}
-
-.asset-card .kv {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  opacity: 0.9;
-  margin: 4px 0;
-}
-
-.asset-card .badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid #2a3e6d;
-  font-size: 11px;
-  background: #27406e;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: #d6e1ff;
-  margin-right: 4px;
 }
 
-.asset-card button {
-  width: auto;
-  padding: 6px 12px;
-  margin-top: 8px;
-  margin-right: 8px;
+#asset-table tbody tr {
+  border-bottom: 1px solid #1e2a4a;
+  transition: background 0.2s ease;
+}
+
+#asset-table tbody tr:hover {
+  background: #0e1730;
+}
+
+#asset-table td {
+  padding: 12px;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+#asset-table button {
+  font-size: 12px;
 }
 
 /* Drawer */

@@ -122,11 +122,41 @@ class DatabasePoller:
             conn.close()
             
             if result and result[0]:
-                return json.loads(result[0])
+                targets_data = json.loads(result[0])
+                # Ensure each target has required fields
+                targets = []
+                for target in targets_data:
+                    if isinstance(target, str):
+                        # Simple IP string - convert to object
+                        targets.append({
+                            'host': target,
+                            'type': 'linux',
+                            'username': 'admin',
+                            'password': ''
+                        })
+                    elif isinstance(target, dict) and 'host' in target:
+                        # Already an object
+                        targets.append(target)
+                return targets
             return []
         except Exception as e:
-            print(f"Error getting targets: {e}")
+            self.log_to_db('error', f"Error getting targets: {e}")
             return []
+    
+    def log_to_db(self, level, message, target=None):
+        """Write log message to database"""
+        try:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO poller_logs (level, message, target) VALUES (%s, %s, %s)",
+                (level, message, target)
+            )
+            conn.commit()
+            conn.close()
+            print(f"[{level.upper()}] {message}")
+        except Exception as e:
+            print(f"[ERROR] Failed to write log: {e}")
     
     def update_last_run(self):
         """Update last run timestamp"""
@@ -170,6 +200,7 @@ class DatabasePoller:
         }
         
         try:
+            self.log_to_db('info', f"Probing Linux host {host}...", host)
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(host, username=user, password=password, timeout=self.poller_config['timeout'])
@@ -193,10 +224,10 @@ class DatabasePoller:
             info["attributes"]["os"]["kernel"] = result.get("uname", "").strip()
             
             ssh.close()
-            print(f"Successfully probed Linux host: {host}")
+            self.log_to_db('success', f"Successfully probed {host}: {info['name']}", host)
             
         except Exception as e:
-            print(f"Error probing Linux host {host}: {e}")
+            self.log_to_db('error', f"Error probing {host}: {str(e)}", host)
         
         return info
     
@@ -236,16 +267,14 @@ class DatabasePoller:
         targets = self.get_targets()
         
         if not targets:
-            print("No targets configured")
+            self.log_to_db('warning', "No targets configured")
             return
         
-        print(f"Polling {len(targets)} targets...")
+        self.log_to_db('info', f"Starting poll cycle for {len(targets)} targets")
         
         for target in targets:
             target_type = target.get('type', 'linux')
             host = target['host']
-            
-            print(f"Polling {target_type} target: {host}")
             
             # Probe the target
             if target_type == 'linux':
@@ -253,14 +282,18 @@ class DatabasePoller:
             elif target_type == 'windows':
                 asset = self.windows_probe(target)
             else:
-                print(f"Unknown target type: {target_type}")
+                self.log_to_db('error', f"Unknown target type: {target_type}", host)
                 continue
             
             # Check if host is online
             online = self.ping(host)
+            status_msg = "online" if online else "offline"
+            self.log_to_db('info', f"Host {host} is {status_msg}", host)
             
             # Push update to API
             self.push_update(asset, online)
+        
+        self.log_to_db('info', f"Poll cycle completed for {len(targets)} targets")
     
     def reload_config(self):
         """Reload configuration from database"""
@@ -277,7 +310,7 @@ class DatabasePoller:
     
     def run(self):
         """Main polling loop"""
-        print("Database-driven Asset Tracker Poller starting...")
+        self.log_to_db('info', "Database-driven Asset Tracker Poller starting...")
         config_reload_counter = 0
         
         while True:
@@ -288,19 +321,18 @@ class DatabasePoller:
                     config_reload_counter = 0
                 
                 if self.should_run():
-                    print(f"[{datetime.now()}] Poller is enabled, starting poll cycle...")
                     self.poll_targets()
                     self.update_last_run()
                 else:
-                    print(f"[{datetime.now()}] Poller is disabled, sleeping...")
+                    self.log_to_db('info', "Poller is disabled, waiting...")
                 
                 config_reload_counter += 1
                 
             except KeyboardInterrupt:
-                print("Poller stopped by user")
+                self.log_to_db('info', "Poller stopped by user")
                 break
             except Exception as e:
-                print(f"Error in poll cycle: {e}")
+                self.log_to_db('error', f"Error in poll cycle: {str(e)}")
             
             # Wait before next cycle using configurable interval
             time.sleep(self.poller_config['interval'])
