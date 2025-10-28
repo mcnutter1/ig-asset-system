@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Asset Tracker</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Asset Tracker</h1>
+      <div id="user-info"></div>
+    </header>
+
+    <section id="login-panel" class="card">
+      <h2>Sign in</h2>
+      <input id="username" placeholder="Username"/>
+      <input id="password" type="password" placeholder="Password"/>
+      <button id="login-btn">Login</button>
+      <div id="login-msg"></div>
+    </section>
+
+    <section id="main" class="hidden">
+      <div class="toolbar">
+        <input id="search" placeholder="Search assets by name/MAC/ID"/>
+        <button id="refresh">Refresh</button>
+        <button id="new-asset">New Asset</button>
+      </div>
+
+      <div id="asset-list" class="grid"></div>
+
+      <div id="drawer" class="drawer hidden">
+        <div class="drawer-content">
+          <button class="close">&times;</button>
+          <div id="asset-detail"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

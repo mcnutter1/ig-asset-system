@@ -1,0 +1,14 @@
+[Unit]
+Description=Asset Tracker Agent
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/asset-agent
+ExecStart=/usr/bin/python3 /opt/asset-agent/agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
