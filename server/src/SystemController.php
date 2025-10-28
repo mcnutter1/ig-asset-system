@@ -18,7 +18,7 @@ class SystemController {
       $stmt->execute();
       $result = $stmt->fetch();
       
-      if ($result && $result['success']) {
+      if ($result && $result['success'] == 1) {
         return ['bootstrapped' => true, 'message' => 'System initialized'];
       } else {
         return ['bootstrapped' => false, 'message' => 'Bootstrap not completed'];

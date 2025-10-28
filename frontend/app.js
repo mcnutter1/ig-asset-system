@@ -16,13 +16,20 @@ const detail = el('#asset-detail');
 // Check system status on page load
 const checkSystemStatus = () => {
   api('system_status').then((status) => {
+    console.log('Bootstrap status:', status); // Debug log
     if (!status.bootstrapped) {
+      // System not bootstrapped - show warning
       el('#bootstrap-warning').classList.remove('hidden');
       el('#login-panel').classList.add('hidden');
       el('#main').classList.add('hidden');
       el('#settings').classList.add('hidden');
+    } else {
+      // System is bootstrapped - hide warning and show login
+      el('#bootstrap-warning').classList.add('hidden');
+      el('#login-panel').classList.remove('hidden');
     }
   }).catch((error) => {
+    console.error('API error:', error); // Debug log
     // If API fails completely, show bootstrap warning
     el('#bootstrap-warning').classList.remove('hidden');
     el('#login-panel').classList.add('hidden');
