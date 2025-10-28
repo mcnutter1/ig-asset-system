@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""
+Database-driven Asset Tracker Poller
+
+This poller queries the database for polling targets and status,
+making it controllable from the web UI.
+"""
+
+import time
+import json
+import requests
+import paramiko
+import socket
+import mysql.connector
+import sys
+import os
+from datetime import datetime
+from config_loader import load_php_config
+
+class DatabasePoller:
+    def __init__(self):
+        self.config = self.load_config_from_db()
+        self.db_config = self.config['database']
+        self.api_config = self.config['api']
+        self.poller_config = self.config['poller']
+    
+    def get_setting(self, conn, category, name, default=None):
+        """Get a setting from the database"""
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE category = %s AND name = %s", (category, name))
+            result = cursor.fetchone()
+            return result[0] if result else default
+        except Exception as e:
+            print(f"Error getting setting {category}.{name}: {e}")
+            return default
+    
+    def load_db_config(self):
+        """Load database configuration from config file or environment"""
+        # Try to load from PHP config first
+        try:
+            config = load_php_config()
+            return config['database']
+        except:
+            # Fallback to defaults
+            return {
+                'host': os.getenv('DB_HOST', '127.0.0.1'),
+                'port': int(os.getenv('DB_PORT', 3306)),
+                'user': os.getenv('DB_USER', 'asset_user'),
+                'password': os.getenv('DB_PASSWORD', 'asset_pass'),
+                'database': os.getenv('DB_NAME', 'asset_tracker')
+            }
+    
+    def load_config_from_db(self):
+        """Load all configuration from database settings"""
+        # First get basic DB connection
+        db_config = self.load_db_config()
+        
+        try:
+            conn = mysql.connector.connect(**db_config)
+            
+            # Load poller configuration from database
+            config = {
+                'database': db_config,
+                'poller': {
+                    'interval': int(self.get_setting(conn, 'poller', 'interval', '30')),
+                    'timeout': int(self.get_setting(conn, 'poller', 'timeout', '10')),
+                    'ping_timeout': int(self.get_setting(conn, 'poller', 'ping_timeout', '1')),
+                },
+                'api': {
+                    'base_url': self.get_setting(conn, 'poller', 'api_url', 'http://localhost:8080/api.php'),
+                    'api_key': self.get_setting(conn, 'poller', 'api_key', 'POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+                }
+            }
+            
+            conn.close()
+            return config
+            
+        except Exception as e:
+            print(f"Error loading config from database: {e}")
+            # Return defaults if database is unavailable
+            return {
+                'database': db_config,
+                'poller': {
+                    'interval': 30,
+                    'timeout': 10,
+                    'ping_timeout': 1,
+                },
+                'api': {
+                    'base_url': 'http://localhost:8080/api.php',
+                    'api_key': 'POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                }
+            }
+    
+    def get_db_connection(self):
+        """Get database connection"""
+        return mysql.connector.connect(**self.db_config)
+    
+    def should_run(self):
+        """Check if poller should be running"""
+        try:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE category = 'poller' AND name = 'status'")
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result and result[0] == 'running':
+                return True
+            return False
+        except Exception as e:
+            print(f"Error checking poller status: {e}")
+            return False
+    
+    def get_targets(self):
+        """Get polling targets from database"""
+        try:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE category = 'poller' AND name = 'targets'")
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result and result[0]:
+                return json.loads(result[0])
+            return []
+        except Exception as e:
+            print(f"Error getting targets: {e}")
+            return []
+    
+    def update_last_run(self):
+        """Update last run timestamp"""
+        try:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cursor.execute("""
+                INSERT INTO settings (category, name, value, description) 
+                VALUES ('poller', 'last_run', %s, 'Last poller execution time')
+                ON DUPLICATE KEY UPDATE value = %s, updated_at = CURRENT_TIMESTAMP
+            """, (now, now))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error updating last run: {e}")
+    
+    def ping(self, host, timeout=None):
+        """Simple ping test"""
+        if timeout is None:
+            timeout = self.poller_config['ping_timeout']
+        try:
+            socket.setdefaulttimeout(timeout)
+            socket.gethostbyname(host)
+            return True
+        except:
+            return False
+    
+    def linux_probe(self, target):
+        """Probe Linux system via SSH"""
+        host = target['host']
+        user = target.get('username', 'ubuntu')
+        password = target.get('password', '')
+        
+        info = {
+            "name": host,
+            "type": "server",
+            "ips": [host],
+            "attributes": {"os": {"family": "linux"}},
+            "mac": None
+        }
+        
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(host, username=user, password=password, timeout=self.poller_config['timeout'])
+            
+            commands = {
+                "uname": "uname -a",
+                "hostname": "hostname",
+                "ip": "hostname -I || ip -4 -o addr show | awk '{print $4}'",
+                "mac": "ip link | awk '/ether/ {print $2; exit}'",
+            }
+            
+            result = {}
+            for key, cmd in commands.items():
+                stdin, stdout, stderr = ssh.exec_command(cmd, timeout=self.poller_config['timeout'])
+                result[key] = stdout.read().decode().strip()
+            
+            info["name"] = result.get("hostname") or host
+            if result.get("ip"):
+                info["ips"] = [ip for ip in result["ip"].split() if ip]
+            info["mac"] = result.get("mac") or None
+            info["attributes"]["os"]["kernel"] = result.get("uname", "").strip()
+            
+            ssh.close()
+            print(f"Successfully probed Linux host: {host}")
+            
+        except Exception as e:
+            print(f"Error probing Linux host {host}: {e}")
+        
+        return info
+    
+    def windows_probe(self, target):
+        """Probe Windows system (basic implementation)"""
+        host = target['host']
+        info = {
+            "name": host,
+            "type": "workstation",
+            "ips": [host],
+            "attributes": {"os": {"family": "windows"}},
+            "mac": None
+        }
+        print(f"Basic probe for Windows host: {host}")
+        return info
+    
+    def push_update(self, asset, online=True):
+        """Push asset update to API"""
+        url = f"{self.api_config['base_url']}?action=agent_push&token={self.api_config['api_key']}"
+        
+        payload = {
+            "asset": asset,
+            "online_status": "online" if online else "offline"
+        }
+        
+        try:
+            response = requests.post(url, json=payload, timeout=self.poller_config['timeout'])
+            if response.status_code == 200:
+                print(f"Updated asset: {asset['name']}")
+            else:
+                print(f"Failed to update asset: {response.status_code}")
+        except Exception as e:
+            print(f"Error pushing update: {e}")
+    
+    def poll_targets(self):
+        """Poll all configured targets"""
+        targets = self.get_targets()
+        
+        if not targets:
+            print("No targets configured")
+            return
+        
+        print(f"Polling {len(targets)} targets...")
+        
+        for target in targets:
+            target_type = target.get('type', 'linux')
+            host = target['host']
+            
+            print(f"Polling {target_type} target: {host}")
+            
+            # Probe the target
+            if target_type == 'linux':
+                asset = self.linux_probe(target)
+            elif target_type == 'windows':
+                asset = self.windows_probe(target)
+            else:
+                print(f"Unknown target type: {target_type}")
+                continue
+            
+            # Check if host is online
+            online = self.ping(host)
+            
+            # Push update to API
+            self.push_update(asset, online)
+    
+    def reload_config(self):
+        """Reload configuration from database"""
+        try:
+            old_interval = self.poller_config['interval']
+            self.config = self.load_config_from_db()
+            self.poller_config = self.config['poller']
+            self.api_config = self.config['api']
+            
+            if old_interval != self.poller_config['interval']:
+                print(f"Updated polling interval: {old_interval}s -> {self.poller_config['interval']}s")
+        except Exception as e:
+            print(f"Error reloading config: {e}")
+    
+    def run(self):
+        """Main polling loop"""
+        print("Database-driven Asset Tracker Poller starting...")
+        config_reload_counter = 0
+        
+        while True:
+            try:
+                # Reload config every 10 cycles to pick up changes
+                if config_reload_counter >= 10:
+                    self.reload_config()
+                    config_reload_counter = 0
+                
+                if self.should_run():
+                    print(f"[{datetime.now()}] Poller is enabled, starting poll cycle...")
+                    self.poll_targets()
+                    self.update_last_run()
+                else:
+                    print(f"[{datetime.now()}] Poller is disabled, sleeping...")
+                
+                config_reload_counter += 1
+                
+            except KeyboardInterrupt:
+                print("Poller stopped by user")
+                break
+            except Exception as e:
+                print(f"Error in poll cycle: {e}")
+            
+            # Wait before next cycle using configurable interval
+            time.sleep(self.poller_config['interval'])
+
+if __name__ == "__main__":
+    poller = DatabasePoller()
+    poller.run()

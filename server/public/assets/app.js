@@ -54,8 +54,61 @@ const checkSystemStatus = () => {
   });
 };
 
-// Initialize system status check
-checkSystemStatus();
+// Initialize page
+document.addEventListener('DOMContentLoaded', () => {
+  checkSystemStatus();
+});
+
+// Poller configuration
+const showPollerConfig = () => {
+  api('poller_config').then(config => {
+    const form = `
+      <form id="poller-config-form">
+        <div class="form-group">
+          <label>Polling Interval (seconds):</label>
+          <input type="number" name="interval" value="${config.interval || 30}" min="5" max="3600">
+        </div>
+        <div class="form-group">
+          <label>Connection Timeout (seconds):</label>
+          <input type="number" name="timeout" value="${config.timeout || 10}" min="1" max="60">
+        </div>
+        <div class="form-group">
+          <label>Ping Timeout (seconds):</label>
+          <input type="number" name="ping_timeout" value="${config.ping_timeout || 1}" min="1" max="10">
+        </div>
+        <div class="form-group">
+          <label>API URL:</label>
+          <input type="url" name="api_url" value="${config.api_url || ''}" style="width: 100%;">
+        </div>
+        <div class="form-group">
+          <label>API Key:</label>
+          <input type="text" name="api_key" value="${config.api_key || ''}" style="width: 100%;">
+        </div>
+        <div style="margin-top: 20px;">
+          <button type="submit">Save Configuration</button>
+          <button type="button" onclick="hideModal()">Cancel</button>
+        </div>
+      </form>
+    `;
+    
+    showModal('Poller Configuration', form);
+    
+    el('#poller-config-form').onsubmit = (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const configData = Object.fromEntries(formData);
+      
+      api('poller_config_update', 'POST', configData).then(response => {
+        if (response.success) {
+          hideModal();
+          alert('Poller configuration updated successfully!');
+        } else {
+          alert('Failed to update configuration: ' + response.message);
+        }
+      });
+    };
+  });
+};
 
 const renderAssetCard = (a) => {
   const ips = (a.ips||[]).map(x=>x.ip).join(', ');

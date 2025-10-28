@@ -8,6 +8,7 @@ require_once __DIR__ . '/../src/AgentController.php';
 require_once __DIR__ . '/../src/UserController.php';
 require_once __DIR__ . '/../src/SettingsController.php';
 require_once __DIR__ . '/../src/SystemController.php';
+require_once __DIR__ . '/../src/PollerController.php';
 
 cors_headers();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
@@ -143,6 +144,49 @@ switch ($action) {
   case 'system_health':
     require_login(); require_role('admin');
     echo json_encode(SystemController::checkSystemHealth());
+    break;
+
+  case 'poller_status':
+    require_login();
+    echo json_encode(PollerController::getStatus());
+    break;
+
+  case 'poller_start':
+    require_login(); require_role('admin');
+    echo json_encode(PollerController::start());
+    break;
+
+  case 'poller_stop':
+    require_login(); require_role('admin');
+    echo json_encode(PollerController::stop());
+    break;
+
+  case 'poller_targets':
+    require_login(); require_role('admin');
+    echo json_encode(PollerController::getTargets());
+    break;
+
+  case 'poller_config':
+    require_login(); require_role('admin');
+    echo json_encode(PollerController::getConfig());
+    break;
+
+  case 'poller_config_update':
+    require_login(); require_role('admin');
+    $in = json_input();
+    echo json_encode(PollerController::updateConfig($in));
+    break;
+
+  case 'poller_add_target':
+    require_login(); require_role('admin');
+    $in = json_input();
+    echo json_encode(PollerController::addTarget($in));
+    break;
+
+  case 'poller_remove_target':
+    require_login(); require_role('admin');
+    $index = intval($_GET['index'] ?? 0);
+    echo json_encode(PollerController::removeTarget($index));
     break;
 
   default:
