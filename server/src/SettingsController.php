@@ -105,50 +105,85 @@ class SettingsController {
     $baseDn = $settings['base_dn']['value'] ?? '';
     $userAttr = $settings['user_attr']['value'] ?? 'sAMAccountName';
     
+    if (empty($host) || empty($bindDn) || empty($baseDn)) {
+      return ['success' => false, 'message' => 'LDAP settings incomplete. Please configure host, bind DN, and base DN.'];
+    }
+    
     $conn = ldap_connect($host, $port);
     if (!$conn) {
       return ['success' => false, 'message' => 'Could not connect to LDAP server'];
     }
     
     ldap_set_option($conn, LDAP_OPT_PROTOCOL_VERSION, 3);
+    ldap_set_option($conn, LDAP_OPT_NETWORK_TIMEOUT, 10);
+    ldap_set_option($conn, LDAP_OPT_REFERRALS, 0);
     
     if (!@ldap_bind($conn, $bindDn, $bindPassword)) {
-      return ['success' => false, 'message' => 'LDAP bind failed'];
+      $error = ldap_error($conn);
+      ldap_close($conn);
+      return ['success' => false, 'message' => "LDAP bind failed: $error"];
     }
     
-    // Default filter to find user accounts
+    // Default filter to find active user accounts
+    // This filters for: user objects, person category, NOT disabled (userAccountControl bit 2)
     $filter = $searchFilter ?: "(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2))";
     
-    $sr = ldap_search($conn, $baseDn, $filter, ['dn', 'mail', 'displayName', $userAttr]);
+    error_log("LDAP Import: Searching with filter: $filter in baseDN: $baseDn");
+    
+    $sr = @ldap_search($conn, $baseDn, $filter, ['dn', 'mail', 'displayName', $userAttr, 'memberOf']);
     if (!$sr) {
-      return ['success' => false, 'message' => 'LDAP search failed'];
+      $error = ldap_error($conn);
+      ldap_close($conn);
+      return ['success' => false, 'message' => "LDAP search failed: $error. Filter: $filter"];
     }
     
     $entries = ldap_get_entries($conn, $sr);
+    error_log("LDAP Import: Found {$entries['count']} entries");
+    
     $imported = 0;
+    $skipped = 0;
+    $errors = [];
     $pdo = DB::conn();
     
     for ($i = 0; $i < $entries['count']; $i++) {
       $entry = $entries[$i];
       
-      $username = $entry[$userAttr][0] ?? '';
+      $username = $entry[strtolower($userAttr)][0] ?? '';
       $displayName = $entry['displayname'][0] ?? $username;
       $email = $entry['mail'][0] ?? '';
       $dn = $entry['dn'];
       
-      if (!empty($username)) {
-        try {
-          $stmt = $pdo->prepare("INSERT IGNORE INTO users (username, display_name, email, ad_dn, role) VALUES (?, ?, ?, ?, 'user')");
-          if ($stmt->execute([$username, $displayName, $email, $dn])) {
+      if (empty($username)) {
+        error_log("LDAP Import: Skipping entry with no username - DN: $dn");
+        $skipped++;
+        continue;
+      }
+      
+      try {
+        $stmt = $pdo->prepare("INSERT IGNORE INTO users (username, display_name, email, ad_dn, role) VALUES (?, ?, ?, ?, 'user')");
+        if ($stmt->execute([$username, $displayName, $email, $dn])) {
+          if ($stmt->rowCount() > 0) {
             $imported++;
+            error_log("LDAP Import: Imported user: $username ($displayName)");
+          } else {
+            $skipped++;
+            error_log("LDAP Import: Skipped duplicate user: $username");
           }
-        } catch (Exception $e) {
-          // Skip duplicate users
         }
+      } catch (Exception $e) {
+        $skipped++;
+        $errors[] = "Error importing $username: " . $e->getMessage();
+        error_log("LDAP Import: Error importing $username: " . $e->getMessage());
       }
     }
     
     ldap_close($conn);
-    return ['success' => true, 'message' => "Imported $imported users from LDAP"];
+    
+    $message = "Imported $imported users, skipped $skipped (duplicates/errors)";
+    if (!empty($errors) && count($errors) <= 5) {
+      $message .= ". Errors: " . implode(", ", $errors);
+    }
+    
+    return ['success' => true, 'message' => $message, 'imported' => $imported, 'skipped' => $skipped];
   }
 }

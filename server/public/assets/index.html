@@ -217,11 +217,11 @@
           <h3>LDAP Configuration</h3>
           <form id="ldap-form">
             <input type="text" id="ldap-server" placeholder="LDAP Server (ldap://domain.com:389)" required>
-            <input type="text" id="ldap-base-dn" placeholder="Base DN (dc=domain,dc=com)" required>
-            <input type="text" id="ldap-bind-dn" placeholder="Bind DN (cn=admin,dc=domain,dc=com)">
+            <input type="text" id="ldap-base-dn" placeholder="Base DN (OU=Users,DC=corp,DC=example,DC=com)" required>
+            <input type="text" id="ldap-bind-dn" placeholder="Bind DN (CN=LDAP Reader,OU=Service Accounts,DC=corp,DC=example,DC=com)">
             <input type="password" id="ldap-bind-password" placeholder="Bind Password">
-            <input type="text" id="ldap-user-filter" placeholder="User Filter ((objectClass=person))">
-            <input type="text" id="ldap-user-attr" placeholder="Username Attribute (sAMAccountName)">
+            <input type="text" id="ldap-user-filter" placeholder="User Filter (leave empty for default)">
+            <input type="text" id="ldap-user-attr" placeholder="Username Attribute (sAMAccountName)" value="sAMAccountName">
             
             <div style="display: flex; gap: 10px; margin-top: 15px;">
               <button type="submit">Save Settings</button>
@@ -231,6 +231,28 @@
 
             <div id="ldap-status" class="alert"></div>
           </form>
+          
+          <details style="margin-top: 20px;">
+            <summary><strong>Example LDAP Filters</strong></summary>
+            <div style="margin-top: 10px; font-size: 0.9em;">
+              <p><strong>Default (if empty):</strong> All active users</p>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2))</code>
+              
+              <p style="margin-top: 15px;"><strong>Users in a specific group:</strong></p>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(memberOf=CN=IT-Staff,OU=Groups,DC=corp,DC=example,DC=com))</code>
+              
+              <p style="margin-top: 15px;"><strong>Users with email addresses:</strong></p>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(mail=*))</code>
+              
+              <p style="margin-top: 15px;"><strong>Users in specific department:</strong></p>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(department=IT))</code>
+              
+              <p style="margin-top: 15px;"><em>Tip: To import from a specific OU, change the Base DN above to point to that OU.</em></p>
+              <p style="margin-top: 5px;"><em>Example: OU=IT Department,OU=Users,DC=corp,DC=example,DC=com</em></p>
+              
+              <p style="margin-top: 15px;"><a href="https://github.com/mcnutter1/ig-asset-system/blob/main/docs/LDAP_FILTERS.md" target="_blank" style="color: #0066cc;">View full filter documentation →</a></p>
+            </div>
+          </details>
         </article>
 
         <!-- Polling Settings Panel -->
