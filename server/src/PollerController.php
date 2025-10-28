@@ -19,21 +19,20 @@ class PollerController {
       $stmt->execute();
       $lastRun = $stmt->fetch();
       
-      // Get polling targets count
-      $stmt = $pdo->prepare("SELECT value FROM settings WHERE category = 'poller' AND name = 'targets'");
+      // Get polling targets count from assets table
+      $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM assets WHERE poll_enabled = TRUE");
       $stmt->execute();
-      $targetsResult = $stmt->fetch();
-      $targets = $targetsResult ? json_decode($targetsResult['value'], true) : [];
+      $countResult = $stmt->fetch();
+      $targetsCount = $countResult ? intval($countResult['count']) : 0;
       
       return [
         'status' => $status,
         'last_run' => $lastRun ? $lastRun['value'] : null,
-        'targets_count' => count($targets),
-        'targets' => $targets
+        'targets_count' => $targetsCount
       ];
       
     } catch (Exception $e) {
-      return ['status' => 'error', 'message' => $e->getMessage()];
+      return ['status' => 'error', 'message' => $e->getMessage(), 'targets_count' => 0];
     }
   }
   

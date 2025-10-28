@@ -42,8 +42,11 @@ const checkSystemStatus = () => {
       warning?.classList.add('hidden');
       login?.classList.remove('hidden');
     }
-  }).catch(() => {
-    el('#bootstrap-warning')?.classList.remove('hidden');
+  }).catch((err) => {
+    console.error('System status check failed:', err);
+    // Show login anyway if system status fails
+    el('#bootstrap-warning')?.classList.add('hidden');
+    el('#login-panel')?.classList.remove('hidden');
   });
 };
 
@@ -298,6 +301,13 @@ const updatePollingStatus = () => {
     }
     if (startBtn) startBtn.disabled = status.status === 'running';
     if (stopBtn) stopBtn.disabled = status.status !== 'running';
+  }).catch(err => {
+    console.error('Failed to update polling status:', err);
+    const statusEl = el('#polling-status');
+    if (statusEl) {
+      statusEl.textContent = 'Polling: Status unavailable';
+      statusEl.style.color = '#888';
+    }
   });
 };
 
