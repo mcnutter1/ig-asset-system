@@ -125,12 +125,18 @@ class SettingsController {
     }
     
     // Default filter to find active user accounts
-    // This filters for: user objects, person category, NOT disabled (userAccountControl bit 2)
-    $filter = $searchFilter ?: "(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2))";
+    // Simplified version without bitwise matching for better compatibility
+    // To exclude disabled accounts, you can add: (!(userAccountControl=514))(!(userAccountControl=546))
+    if (empty($searchFilter)) {
+      // Try simple filter first - just users who are people
+      $filter = "(&(objectClass=user)(objectCategory=person))";
+    } else {
+      $filter = $searchFilter;
+    }
     
     error_log("LDAP Import: Searching with filter: $filter in baseDN: $baseDn");
     
-    $sr = @ldap_search($conn, $baseDn, $filter, ['dn', 'mail', 'displayName', $userAttr, 'memberOf']);
+    $sr = @ldap_search($conn, $baseDn, $filter, ['dn', 'mail', 'displayName', $userAttr, 'memberOf', 'userAccountControl']);
     if (!$sr) {
       $error = ldap_error($conn);
       ldap_close($conn);
@@ -152,9 +158,18 @@ class SettingsController {
       $displayName = $entry['displayname'][0] ?? $username;
       $email = $entry['mail'][0] ?? '';
       $dn = $entry['dn'];
+      $uac = $entry['useraccountcontrol'][0] ?? 0;
       
       if (empty($username)) {
         error_log("LDAP Import: Skipping entry with no username - DN: $dn");
+        $skipped++;
+        continue;
+      }
+      
+      // Check if account is disabled (bit 2 of userAccountControl)
+      // Common values: 512 = enabled, 514 = disabled, 546 = disabled+password not required
+      if ($uac && ($uac & 2)) {
+        error_log("LDAP Import: Skipping disabled account: $username (UAC: $uac)");
         $skipped++;
         continue;
       }

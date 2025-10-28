@@ -235,17 +235,17 @@
           <details style="margin-top: 20px;">
             <summary><strong>Example LDAP Filters</strong></summary>
             <div style="margin-top: 10px; font-size: 0.9em;">
-              <p><strong>Default (if empty):</strong> All active users</p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2))</code>
+              <p><strong>Default (if empty):</strong> All users (disabled accounts are filtered out automatically)</p>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person))</code>
               
               <p style="margin-top: 15px;"><strong>Users in a specific group:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(memberOf=CN=IT-Staff,OU=Groups,DC=corp,DC=example,DC=com))</code>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(memberOf=CN=IT-Staff,OU=Groups,DC=corp,DC=example,DC=com))</code>
               
               <p style="margin-top: 15px;"><strong>Users with email addresses:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(mail=*))</code>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(mail=*))</code>
               
               <p style="margin-top: 15px;"><strong>Users in specific department:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(!userAccountControl:1.2.840.113556.1.4.803:=2)(department=IT))</code>
+              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(department=IT))</code>
               
               <p style="margin-top: 15px;"><em>Tip: To import from a specific OU, change the Base DN above to point to that OU.</em></p>
               <p style="margin-top: 5px;"><em>Example: OU=IT Department,OU=Users,DC=corp,DC=example,DC=com</em></p>

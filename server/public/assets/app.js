@@ -172,7 +172,8 @@ const setupSettingsListeners = () => {
   el('#import-ldap').onclick = () => {
     if (!confirm('Import users from LDAP? This may take a while.')) return;
     showAlert('ldap-status', 'Importing users...', 'info');
-    api('ldap_import', 'POST', {}).then(r => {
+    const filter = el('#ldap-user-filter').value.trim() || null;
+    api('ldap_import', 'POST', { filter }).then(r => {
       showAlert('ldap-status', r.message, r.success ? 'success' : 'error');
     });
   };
