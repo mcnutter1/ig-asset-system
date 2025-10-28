@@ -9,6 +9,6 @@ windows:
     username: Administrator
     password: "P@ssw0rd"
 api:
-  base_url: "http://localhost:8080/api.php"
-  api_key: "POLLR_DEFAULT_REPLACE_ME"
+  base_url: "http://azre-itassets1.corp.inovagenix.com/api.php"
+  api_key: "POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 interval_seconds: 120
