@@ -1,6 +1,16 @@
 // API Helper
 const api = (action, method = 'GET', body = null, timeout = 30000) => {
-  const url = '/api.php?action=' + encodeURIComponent(action);
+  // Handle action with query parameters (e.g., "asset_get&id=123")
+  // Split at first & to separate action from additional params
+  const parts = action.split('&');
+  const baseAction = parts[0];
+  const extraParams = parts.slice(1).join('&');
+  
+  let url = '/api.php?action=' + encodeURIComponent(baseAction);
+  if (extraParams) {
+    url += '&' + extraParams;
+  }
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
