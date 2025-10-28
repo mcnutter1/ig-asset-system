@@ -34,26 +34,28 @@ const checkSystemStatus = () => {
 };
 
 // ============= AUTHENTICATION =============
-el('#login-btn').onclick = () => {
-  const username = el('#username').value;
-  const password = el('#password').value;
+const setupAuthHandlers = () => {
+  el('#login-btn').onclick = () => {
+    const username = el('#username').value;
+    const password = el('#password').value;
 
-  api('login', 'POST', { username, password }).then(r => {
-    if (r.success) {
-      el('#login-panel').classList.add('hidden');
-      el('#main').classList.remove('hidden');
-      el('#settings-btn').classList.remove('hidden');
-      loadAssets();
-      updatePollingStatus();
-    } else {
-      el('#login-msg').textContent = 'Login failed: ' + r.message;
-      el('#login-msg').style.color = '#ff6b6b';
-    }
-  });
+    api('login', 'POST', { username, password }).then(r => {
+      if (r.success) {
+        el('#login-panel').classList.add('hidden');
+        el('#main').classList.remove('hidden');
+        el('#settings-btn').classList.remove('hidden');
+        loadAssets();
+        updatePollingStatus();
+      } else {
+        el('#login-msg').textContent = 'Login failed: ' + r.message;
+        el('#login-msg').style.color = '#ff6b6b';
+      }
+    });
+  };
+
+  el('#settings-btn').onclick = () => showSettings();
+  el('#back-to-main').onclick = () => hideSettings();
 };
-
-el('#settings-btn').onclick = () => showSettings();
-el('#back-to-main').onclick = () => hideSettings();
 
 // ============= SETTINGS MANAGEMENT =============
 const showSettings = () => {
@@ -295,77 +297,94 @@ const deleteAsset = (id) => {
   });
 };
 
-el('#new-asset').onclick = () => {
-  el('#asset-id').value = '';
-  el('#asset-name').value = '';
-  el('#asset-type').value = '';
-  el('#asset-mac').value = '';
-  el('#asset-ips').value = '';
-  el('#asset-owner').value = '';
-  el('#asset-attributes').value = '';
-  el('#modal-title').textContent = 'Add Asset';
-  el('#asset-modal').showModal();
-};
+// ============= EVENT HANDLER INITIALIZATION =============
+const setupAllHandlers = () => {
+  // Asset management handlers
+  el('#refresh').onclick = loadAssets;
 
-el('#asset-form').onsubmit = (e) => {
-  e.preventDefault();
-  const id = el('#asset-id').value;
-  const data = {
-    name: el('#asset-name').value,
-    type: el('#asset-type').value,
-    mac: el('#asset-mac').value || null,
-    ips: el('#asset-ips').value.split(',').map(ip => ({ ip: ip.trim() })),
-    owner_id: el('#asset-owner').value || null,
-    attributes: el('#asset-attributes').value ? JSON.parse(el('#asset-attributes').value) : {}
+  el('#new-asset').onclick = () => {
+    el('#asset-id').value = '';
+    el('#asset-name').value = '';
+    el('#asset-type').value = '';
+    el('#asset-mac').value = '';
+    el('#asset-ips').value = '';
+    el('#asset-owner').value = '';
+    el('#asset-attributes').value = '';
+    el('#modal-title').textContent = 'Add Asset';
+    el('#asset-modal').showModal();
   };
-  const method = id ? 'PUT' : 'POST';
-  const action = id ? `assets/${id}` : 'assets';
-  api(action, method, data).then(r => {
-    if (r.success) {
-      el('#asset-modal').close();
-      loadAssets();
-    } else {
-      alert('Error: ' + r.message);
-    }
-  });
-};
 
-el('#confirm-delete').onclick = () => {
-  const id = el('#delete-modal').dataset.assetId;
-  api(`assets/${id}`, 'DELETE').then(r => {
-    if (r.success) {
-      el('#delete-modal').close();
-      loadAssets();
-    } else {
-      alert('Error: ' + r.message);
-    }
-  });
-};
-
-el('#refresh').onclick = loadAssets;
-
-el('#search').addEventListener('keyup', () => {
-  const q = el('#search').value.toLowerCase();
-  elAll('.asset-card').forEach(card => {
-    const text = card.textContent.toLowerCase();
-    card.style.display = text.includes(q) ? '' : 'none';
-  });
-});
-
-elAll('.modal-close, .modal-cancel').forEach(btn => {
-  btn.onclick = () => {
-    if (btn.closest('dialog')) {
-      btn.closest('dialog').close();
-    }
+  el('#asset-form').onsubmit = (e) => {
+    e.preventDefault();
+    const id = el('#asset-id').value;
+    const data = {
+      name: el('#asset-name').value,
+      type: el('#asset-type').value,
+      mac: el('#asset-mac').value || null,
+      ips: el('#asset-ips').value.split(',').map(ip => ({ ip: ip.trim() })),
+      owner_id: el('#asset-owner').value || null,
+      attributes: el('#asset-attributes').value ? JSON.parse(el('#asset-attributes').value) : {}
+    };
+    const method = id ? 'PUT' : 'POST';
+    const action = id ? `assets/${id}` : 'assets';
+    api(action, method, data).then(r => {
+      if (r.success) {
+        el('#asset-modal').close();
+        loadAssets();
+      } else {
+        alert('Error: ' + r.message);
+      }
+    });
   };
-});
 
-el('#drawer .close').onclick = () => {
-  el('#drawer').classList.add('hidden');
+  el('#confirm-delete').onclick = () => {
+    const id = el('#delete-modal').dataset.assetId;
+    api(`assets/${id}`, 'DELETE').then(r => {
+      if (r.success) {
+        el('#delete-modal').close();
+        loadAssets();
+      } else {
+        alert('Error: ' + r.message);
+      }
+    });
+  };
+
+  el('#search').addEventListener('keyup', () => {
+    const q = el('#search').value.toLowerCase();
+    elAll('.asset-card').forEach(card => {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Modal close buttons
+  elAll('.modal-close, .modal-cancel').forEach(btn => {
+    btn.onclick = () => {
+      if (btn.closest('dialog')) {
+        btn.closest('dialog').close();
+      }
+    };
+  });
+
+  el('#drawer .close').onclick = () => {
+    el('#drawer').classList.add('hidden');
+  };
+
+  // Polling handlers
+  el('#start-polling').onclick = () => {
+    api('poller_start', 'POST').then(() => updatePollingStatus());
+  };
+
+  el('#stop-polling').onclick = () => {
+    api('poller_stop', 'POST').then(() => updatePollingStatus());
+  };
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+  setupAuthHandlers();
+  setupAllHandlers();
+  setupSettingsListeners();
   checkSystemStatus();
   updatePollingStatus();
   setInterval(updatePollingStatus, 30000);
