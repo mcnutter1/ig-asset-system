@@ -195,50 +195,6 @@ switch ($action) {
     echo json_encode(PollerController::getLogs($since));
     break;
 
-  case 'poller_logs_stream':
-    require_login();
-    // Server-Sent Events endpoint for live log streaming
-    header('Content-Type: text/event-stream');
-    header('Cache-Control: no-cache');
-    header('Connection: keep-alive');
-    header('X-Accel-Buffering: no'); // Disable nginx buffering
-    
-    $lastId = intval($_GET['lastEventId'] ?? 0);
-    $maxIterations = 60; // Run for max 2 minutes (60 * 2 seconds)
-    $iteration = 0;
-    
-    // Set time limit for this script
-    set_time_limit(150);
-    
-    while ($iteration < $maxIterations) {
-      // Check if client disconnected
-      if (connection_aborted()) {
-        break;
-      }
-      
-      $logs = PollerController::getLogs($lastId);
-      
-      foreach ($logs as $log) {
-        echo "id: {$log['id']}\n";
-        echo "data: " . json_encode($log) . "\n\n";
-        $lastId = max($lastId, $log['id']);
-        flush();
-      }
-      
-      // Send keep-alive comment every 2 seconds
-      echo ": keepalive\n\n";
-      flush();
-      
-      sleep(2);
-      $iteration++;
-    }
-    
-    // Send close message
-    echo "event: close\n";
-    echo "data: Stream timeout\n\n";
-    flush();
-    break;
-
   default:
     echo json_encode(['error'=>'unknown_action']);
 }

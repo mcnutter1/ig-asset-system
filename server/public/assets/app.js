@@ -5,8 +5,17 @@ const api = (action, method = 'GET', body = null) => {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : null,
-    credentials: 'include'
-  }).then(r => r.json());
+    credentials: 'include',
+    signal: AbortSignal.timeout(10000) // 10 second timeout
+  }).then(r => {
+    if (!r.ok && r.status !== 401) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+    return r.json();
+  }).catch(err => {
+    console.error('API Error:', action, err);
+    throw err;
+  });
 };
 
 const el = sel => document.querySelector(sel);
@@ -160,68 +169,73 @@ const setupSettingsListeners = () => {
     api('poller_stop', 'POST').then(() => updatePollingStatusInSettings());
   };
 
-  // Polling Log Viewer (uses polling instead of SSE to avoid blocking PHP dev server)
-  let logPollingInterval = null;
+  // Polling Log Viewer - Simple load on demand
   let lastLogId = 0;
+  let autoRefresh = false;
+  let refreshInterval = null;
+
+  const loadLogs = () => {
+    api(`poller_logs&since=${lastLogId}`).then(logs => {
+      if (!logs || logs.length === 0) {
+        if (lastLogId === 0) {
+          el('#poller-logs').innerHTML = '<div style="color: #888;">No logs available yet</div>';
+        }
+        return;
+      }
+      
+      const logsContainer = el('#poller-logs');
+      if (lastLogId === 0) {
+        logsContainer.innerHTML = ''; // Clear "no logs" message
+      }
+      
+      logs.forEach(log => {
+        const logLine = document.createElement('div');
+        
+        // Color code by level
+        let color = '#0f0'; // green for info
+        if (log.level === 'error') color = '#ff6b6b';
+        if (log.level === 'warning') color = '#ffaa00';
+        if (log.level === 'success') color = '#6dd17f';
+        
+        logLine.style.color = color;
+        logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
+        
+        logsContainer.appendChild(logLine);
+        lastLogId = Math.max(lastLogId, log.id);
+      });
+      
+      // Auto-scroll to bottom
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+      
+      // Keep only last 200 lines
+      while (logsContainer.children.length > 200) {
+        logsContainer.removeChild(logsContainer.firstChild);
+      }
+    }).catch(err => {
+      console.error('Error fetching logs:', err);
+    });
+  };
 
   el('#start-log-stream').onclick = () => {
-    if (logPollingInterval) {
-      return; // Already streaming
-    }
-
-    const logsContainer = el('#poller-logs');
-    logsContainer.innerHTML = '<div style="color: #ffff00;">Starting log viewer...</div>';
-
-    // Fetch logs every 2 seconds
-    logPollingInterval = setInterval(() => {
-      api(`poller_logs&since=${lastLogId}`).then(logs => {
-        if (!logs || logs.length === 0) return;
-        
-        logs.forEach(log => {
-          const logLine = document.createElement('div');
-          
-          // Color code by level
-          let color = '#0f0'; // green for info
-          if (log.level === 'error') color = '#ff6b6b';
-          if (log.level === 'warning') color = '#ffaa00';
-          if (log.level === 'success') color = '#6dd17f';
-          
-          logLine.style.color = color;
-          logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
-          
-          logsContainer.appendChild(logLine);
-          lastLogId = Math.max(lastLogId, log.id);
-          
-          // Auto-scroll to bottom
-          logsContainer.scrollTop = logsContainer.scrollHeight;
-          
-          // Keep only last 200 lines
-          while (logsContainer.children.length > 200) {
-            logsContainer.removeChild(logsContainer.firstChild);
-          }
-        });
-      }).catch(err => {
-        console.error('Error fetching logs:', err);
-      });
-    }, 2000);
-
+    if (autoRefresh) return;
+    
+    autoRefresh = true;
+    loadLogs(); // Load immediately
+    refreshInterval = setInterval(loadLogs, 3000); // Refresh every 3 seconds
+    
     el('#start-log-stream').disabled = true;
     el('#stop-log-stream').disabled = false;
   };
 
   el('#stop-log-stream').onclick = () => {
-    if (logPollingInterval) {
-      clearInterval(logPollingInterval);
-      logPollingInterval = null;
-      el('#start-log-stream').disabled = false;
-      el('#stop-log-stream').disabled = true;
-      
-      const logsContainer = el('#poller-logs');
-      const stopLine = document.createElement('div');
-      stopLine.style.color = '#ffaa00';
-      stopLine.textContent = `[STOPPED] Log viewer stopped`;
-      logsContainer.appendChild(stopLine);
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+      refreshInterval = null;
+      autoRefresh = false;
     }
+    
+    el('#start-log-stream').disabled = false;
+    el('#stop-log-stream').disabled = true;
   };
 
   el('#clear-logs').onclick = () => {
