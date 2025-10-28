@@ -160,71 +160,73 @@ const setupSettingsListeners = () => {
     api('poller_stop', 'POST').then(() => updatePollingStatusInSettings());
   };
 
-  // Polling Log Stream
-  let logEventSource = null;
+  // Polling Log Viewer (uses polling instead of SSE to avoid blocking PHP dev server)
+  let logPollingInterval = null;
+  let lastLogId = 0;
 
   el('#start-log-stream').onclick = () => {
-    if (logEventSource) {
+    if (logPollingInterval) {
       return; // Already streaming
     }
 
     const logsContainer = el('#poller-logs');
-    logsContainer.innerHTML = '<div style="color: #ffff00;">Connecting to log stream...</div>';
+    logsContainer.innerHTML = '<div style="color: #ffff00;">Starting log viewer...</div>';
 
-    logEventSource = new EventSource('/api.php?action=poller_logs_stream');
-    
-    logEventSource.onmessage = (event) => {
-      const log = JSON.parse(event.data);
-      const logLine = document.createElement('div');
-      
-      // Color code by level
-      let color = '#0f0'; // green for info
-      if (log.level === 'error') color = '#ff6b6b';
-      if (log.level === 'warning') color = '#ffaa00';
-      if (log.level === 'success') color = '#6dd17f';
-      
-      logLine.style.color = color;
-      logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
-      
-      logsContainer.appendChild(logLine);
-      
-      // Auto-scroll to bottom
-      logsContainer.scrollTop = logsContainer.scrollHeight;
-      
-      // Keep only last 200 lines
-      while (logsContainer.children.length > 200) {
-        logsContainer.removeChild(logsContainer.firstChild);
-      }
-    };
-    
-    logEventSource.onerror = () => {
-      const errorLine = document.createElement('div');
-      errorLine.style.color = '#ff6b6b';
-      errorLine.textContent = `[ERROR] Log stream disconnected. Reconnecting...`;
-      logsContainer.appendChild(errorLine);
-    };
+    // Fetch logs every 2 seconds
+    logPollingInterval = setInterval(() => {
+      api(`poller_logs&since=${lastLogId}`).then(logs => {
+        if (!logs || logs.length === 0) return;
+        
+        logs.forEach(log => {
+          const logLine = document.createElement('div');
+          
+          // Color code by level
+          let color = '#0f0'; // green for info
+          if (log.level === 'error') color = '#ff6b6b';
+          if (log.level === 'warning') color = '#ffaa00';
+          if (log.level === 'success') color = '#6dd17f';
+          
+          logLine.style.color = color;
+          logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
+          
+          logsContainer.appendChild(logLine);
+          lastLogId = Math.max(lastLogId, log.id);
+          
+          // Auto-scroll to bottom
+          logsContainer.scrollTop = logsContainer.scrollHeight;
+          
+          // Keep only last 200 lines
+          while (logsContainer.children.length > 200) {
+            logsContainer.removeChild(logsContainer.firstChild);
+          }
+        });
+      }).catch(err => {
+        console.error('Error fetching logs:', err);
+      });
+    }, 2000);
 
     el('#start-log-stream').disabled = true;
     el('#stop-log-stream').disabled = false;
   };
 
   el('#stop-log-stream').onclick = () => {
-    if (logEventSource) {
-      logEventSource.close();
-      logEventSource = null;
+    if (logPollingInterval) {
+      clearInterval(logPollingInterval);
+      logPollingInterval = null;
       el('#start-log-stream').disabled = false;
       el('#stop-log-stream').disabled = true;
       
       const logsContainer = el('#poller-logs');
       const stopLine = document.createElement('div');
       stopLine.style.color = '#ffaa00';
-      stopLine.textContent = `[STOPPED] Log stream disconnected by user`;
+      stopLine.textContent = `[STOPPED] Log viewer stopped`;
       logsContainer.appendChild(stopLine);
     }
   };
 
   el('#clear-logs').onclick = () => {
     el('#poller-logs').innerHTML = '';
+    lastLogId = 0;
   };
 
   el('#check-health-btn').onclick = checkSystemHealth;

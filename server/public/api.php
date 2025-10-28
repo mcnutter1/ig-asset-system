@@ -204,8 +204,18 @@ switch ($action) {
     header('X-Accel-Buffering: no'); // Disable nginx buffering
     
     $lastId = intval($_GET['lastEventId'] ?? 0);
+    $maxIterations = 60; // Run for max 2 minutes (60 * 2 seconds)
+    $iteration = 0;
     
-    while (true) {
+    // Set time limit for this script
+    set_time_limit(150);
+    
+    while ($iteration < $maxIterations) {
+      // Check if client disconnected
+      if (connection_aborted()) {
+        break;
+      }
+      
       $logs = PollerController::getLogs($lastId);
       
       foreach ($logs as $log) {
@@ -215,12 +225,18 @@ switch ($action) {
         flush();
       }
       
-      // Send keep-alive comment
+      // Send keep-alive comment every 2 seconds
       echo ": keepalive\n\n";
       flush();
       
       sleep(2);
+      $iteration++;
     }
+    
+    // Send close message
+    echo "event: close\n";
+    echo "data: Stream timeout\n\n";
+    flush();
     break;
 
   default:
