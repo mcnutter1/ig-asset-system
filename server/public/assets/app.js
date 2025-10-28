@@ -490,27 +490,45 @@ const setupAllHandlers = () => {
       poll_password: el('#asset-poll-password').value || null,
       poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
     };
-    const method = id ? 'PUT' : 'POST';
-    const action = id ? 'asset_update' : 'asset_create';
-    api(action, method, {id, ...data}).then(r => {
-      if (r.success || r.ok) {
-        el('#asset-modal').close();
-        loadAssets();
-      } else {
-        alert('Error: ' + (r.message || r.error));
-      }
-    });
+    
+    if (id) {
+      // Update existing asset
+      api('asset_update', 'POST', {id, ...data}).then(r => {
+        if (r.success || r.ok) {
+          el('#asset-modal').close();
+          loadAssets();
+        } else {
+          alert('Error: ' + (r.message || r.error));
+        }
+      }).catch(err => {
+        alert('Failed to update asset: ' + err.message);
+      });
+    } else {
+      // Create new asset
+      api('asset_create', 'POST', data).then(r => {
+        if (r.success || r.ok) {
+          el('#asset-modal').close();
+          loadAssets();
+        } else {
+          alert('Error: ' + (r.message || r.error));
+        }
+      }).catch(err => {
+        alert('Failed to create asset: ' + err.message);
+      });
+    }
   };
 
   el('#confirm-delete').onclick = () => {
     const id = el('#delete-modal').dataset.assetId;
-    api(`assets/${id}`, 'DELETE').then(r => {
-      if (r.success) {
+    api(`asset_delete&id=${id}`, 'POST').then(r => {
+      if (r.success || r.ok) {
         el('#delete-modal').close();
         loadAssets();
       } else {
-        alert('Error: ' + r.message);
+        alert('Error: ' + (r.message || r.error));
       }
+    }).catch(err => {
+      alert('Failed to delete asset: ' + err.message);
     });
   };
 
