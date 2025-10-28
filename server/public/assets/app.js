@@ -385,7 +385,9 @@ const loadAssets = () => {
 };
 
 const viewAsset = (id) => {
+  console.log('viewAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
+    console.log('Asset data:', a);
     const drawer = el('#drawer');
     const content = el('#asset-detail');
     content.innerHTML = `
@@ -399,11 +401,16 @@ const viewAsset = (id) => {
       <pre>${JSON.stringify(a.attributes, null, 2)}</pre>
     `;
     drawer.classList.remove('hidden');
+  }).catch(err => {
+    console.error('Error loading asset:', err);
+    alert('Failed to load asset: ' + err.message);
   });
 };
 
 const editAsset = (id) => {
+  console.log('editAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
+    console.log('Asset data for edit:', a);
     el('#asset-id').value = a.id;
     el('#asset-name').value = a.name;
     el('#asset-type').value = a.type;
@@ -421,14 +428,22 @@ const editAsset = (id) => {
     
     el('#modal-title').textContent = 'Edit Asset';
     el('#asset-modal').showModal();
+  }).catch(err => {
+    console.error('Error loading asset for edit:', err);
+    alert('Failed to load asset: ' + err.message);
   });
 };
 
 const deleteAsset = (id) => {
+  console.log('deleteAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
+    console.log('Asset data for delete:', a);
     el('#delete-asset-name').textContent = a.name;
     el('#delete-modal').dataset.assetId = id;
     el('#delete-modal').showModal();
+  }).catch(err => {
+    console.error('Error loading asset for delete:', err);
+    alert('Failed to load asset: ' + err.message);
   });
 };
 
