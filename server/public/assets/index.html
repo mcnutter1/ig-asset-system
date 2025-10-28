@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Asset Tracker</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
   <link rel="stylesheet" href="/assets/styles.css"/>
 </head>
 <body>
   <div id="app">
+    <!-- Bootstrap Warning -->
     <div id="bootstrap-warning" class="bootstrap-warning hidden">
       <div class="bootstrap-content">
         <h2>⚠️ System Not Initialized</h2>
@@ -19,34 +21,53 @@
       </div>
     </div>
 
+    <!-- Header -->
     <header>
-      <h1>Asset Tracker</h1>
-      <div id="user-info"></div>
-      <div id="admin-controls" class="hidden">
-        <button id="settings-btn">Settings</button>
-      </div>
+      <nav>
+        <ul>
+          <li><strong>Asset Tracker</strong></li>
+        </ul>
+        <ul>
+          <li id="user-info"></li>
+        </ul>
+      </nav>
     </header>
 
-    <section id="login-panel" class="card">
-      <h2>Sign in</h2>
-      <input id="username" placeholder="Username"/>
-      <input id="password" type="password" placeholder="Password"/>
-      <button id="login-btn">Login</button>
-      <div id="login-msg"></div>
+    <!-- Login Panel -->
+    <section id="login-panel" class="hidden">
+      <article style="max-width: 400px; margin: 50px auto;">
+        <h2>Sign in</h2>
+        <form>
+          <input id="username" placeholder="Username" required>
+          <input id="password" type="password" placeholder="Password" required>
+          <button id="login-btn">Login</button>
+          <div id="login-msg"></div>
+        </form>
+      </article>
     </section>
 
+    <!-- Main Content -->
     <section id="main" class="hidden">
-      <div class="toolbar">
-        <input id="search" placeholder="Search assets by name/MAC/ID"/>
-        <button id="refresh">Refresh</button>
-        <button id="new-asset">New Asset</button>
-        <button id="start-polling">Start Polling</button>
-        <button id="stop-polling">Stop Polling</button>
-        <button id="settings-btn" onclick="showSettings()">Settings</button>
-        <span id="polling-status">Polling: Unknown</span>
-      </div>
+      <!-- Toolbar -->
+      <nav style="background: var(--form-element-background-color);">
+        <ul>
+          <li>
+            <input id="search" placeholder="Search assets..." style="min-width: 300px;">
+          </li>
+        </ul>
+        <ul>
+          <li><button id="refresh">Refresh</button></li>
+          <li><button id="new-asset">+ New Asset</button></li>
+          <li>
+            <button id="start-polling">▶ Start Polling</button>
+            <button id="stop-polling">⏸ Stop Polling</button>
+          </li>
+          <li><button id="settings-btn">⚙ Settings</button></li>
+        </ul>
+      </nav>
 
-      <div id="asset-list" class="grid"></div>
+      <!-- Asset Grid -->
+      <div id="asset-list" class="asset-grid"></div>
 
       <!-- Asset Detail Drawer -->
       <div id="drawer" class="drawer hidden">
@@ -56,86 +77,164 @@
         </div>
       </div>
 
-      <!-- Add/Edit Asset Modal -->
-      <div id="asset-modal" class="modal hidden">
-        <div class="modal-content">
-          <div class="modal-header">
+      <!-- Asset Modal -->
+      <dialog id="asset-modal">
+        <article>
+          <header>
             <h3 id="modal-title">Add Asset</h3>
-            <button class="modal-close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <form id="asset-form">
-              <input type="hidden" id="asset-id">
-              <label>
-                Asset Name:
-                <input type="text" id="asset-name" required>
-              </label>
-              <label>
-                Type:
-                <select id="asset-type">
-                  <option value="workstation">Workstation</option>
-                  <option value="server">Server</option>
-                  <option value="iot">IoT Device</option>
-                  <option value="network">Network Equipment</option>
-                  <option value="mobile">Mobile Device</option>
-                  <option value="unknown">Unknown</option>
-                </select>
-              </label>
-              <label>
-                MAC Address:
-                <input type="text" id="asset-mac" placeholder="00:11:22:33:44:55">
-              </label>
-              <label>
-                IP Addresses (comma-separated):
-                <input type="text" id="asset-ips" placeholder="192.168.1.100, 10.0.0.50">
-              </label>
-              <label>
-                Owner User ID:
-                <input type="number" id="asset-owner" placeholder="Leave empty if none">
-              </label>
-              <label>
-                Attributes (JSON):
-                <textarea id="asset-attributes" rows="5" placeholder='{"os": {"name": "Windows 11"}, "hardware": {"cpu": "Intel i7"}}'></textarea>
-              </label>
-              <div class="modal-actions">
-                <button type="submit" id="save-asset">Save Asset</button>
-                <button type="button" class="modal-cancel">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <!-- Delete Confirmation Modal -->
-      <div id="delete-modal" class="modal hidden">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Delete Asset</h3>
-            <button class="modal-close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <p>Are you sure you want to delete this asset?</p>
-            <p><strong id="delete-asset-name"></strong></p>
-            <p>This action cannot be undone.</p>
-            <div class="modal-actions">
-              <button id="confirm-delete" class="delete-btn">Delete Asset</button>
-              <button class="modal-cancel">Cancel</button>
+            <button aria-label="Close" class="modal-close"></button>
+          </header>
+          <form id="asset-form">
+            <input type="hidden" id="asset-id">
+            <input type="text" id="asset-name" placeholder="Asset Name" required>
+            <select id="asset-type">
+              <option value="">Select Type...</option>
+              <option value="workstation">Workstation</option>
+              <option value="server">Server</option>
+              <option value="iot">IoT Device</option>
+              <option value="network">Network Equipment</option>
+              <option value="mobile">Mobile Device</option>
+              <option value="unknown">Unknown</option>
+            </select>
+            <input type="text" id="asset-mac" placeholder="MAC Address (00:11:22:33:44:55)">
+            <input type="text" id="asset-ips" placeholder="IP Addresses (comma-separated)">
+            <input type="number" id="asset-owner" placeholder="Owner User ID">
+            <textarea id="asset-attributes" placeholder='Attributes (JSON)' rows="4"></textarea>
+            <div style="display: flex; gap: 10px;">
+              <button type="submit">Save Asset</button>
+              <button type="button" class="secondary modal-cancel">Cancel</button>
             </div>
+          </form>
+        </article>
+      </dialog>
+
+      <!-- Delete Modal -->
+      <dialog id="delete-modal">
+        <article>
+          <header>
+            <h3>Delete Asset</h3>
+          </header>
+          <p>Are you sure you want to delete this asset?</p>
+          <p><strong id="delete-asset-name"></strong></p>
+          <p>This action cannot be undone.</p>
+          <div style="display: flex; gap: 10px;">
+            <button id="confirm-delete" class="contrast">Delete</button>
+            <button type="button" class="secondary modal-cancel">Cancel</button>
           </div>
-        </div>
-      </div>
+        </article>
+      </dialog>
+
+      <!-- Polling Status -->
+      <footer style="margin-top: 20px;">
+        <span id="polling-status" style="color: var(--muted-color);">Polling: Unknown</span>
+      </footer>
     </section>
 
+    <!-- Settings Section -->
     <section id="settings" class="hidden">
-      <div class="settings-header">
-        <h2>System Settings</h2>
-        <button id="back-to-main" onclick="hideSettings()">← Back to Assets</button>
-      </div>
-      <div id="settings-container">
-        <!-- Settings content will be loaded dynamically -->
+      <div style="max-width: 900px; margin: 20px auto;">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+          <h2>System Settings</h2>
+          <button id="back-to-main" class="secondary">← Back to Assets</button>
+        </header>
+
+        <!-- Settings Tabs -->
+        <nav>
+          <ul>
+            <li><a href="#ldap-settings" class="settings-tab active" data-tab="ldap">LDAP Settings</a></li>
+            <li><a href="#poller-settings" class="settings-tab" data-tab="poller">Polling</a></li>
+            <li><a href="#system-settings" class="settings-tab" data-tab="system">System</a></li>
+          </ul>
+        </nav>
+
+        <!-- LDAP Settings Panel -->
+        <article id="ldap-settings" class="settings-panel active">
+          <h3>LDAP Configuration</h3>
+          <form id="ldap-form">
+            <input type="text" id="ldap-server" placeholder="LDAP Server (ldap://domain.com:389)" required>
+            <input type="text" id="ldap-base-dn" placeholder="Base DN (dc=domain,dc=com)" required>
+            <input type="text" id="ldap-bind-dn" placeholder="Bind DN (cn=admin,dc=domain,dc=com)">
+            <input type="password" id="ldap-bind-password" placeholder="Bind Password">
+            <input type="text" id="ldap-user-filter" placeholder="User Filter ((objectClass=person))">
+            <input type="text" id="ldap-user-attr" placeholder="Username Attribute (sAMAccountName)">
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+              <button type="submit">Save Settings</button>
+              <button type="button" id="test-ldap" class="secondary">Test Connection</button>
+              <button type="button" id="import-ldap" class="secondary">Import Users</button>
+            </div>
+
+            <div id="ldap-status" class="alert"></div>
+          </form>
+        </article>
+
+        <!-- Polling Settings Panel -->
+        <article id="poller-settings" class="settings-panel" style="display: none;">
+          <h3>Polling Configuration</h3>
+          <form id="poller-form">
+            <label>
+              Polling Interval (seconds)
+              <input type="number" id="poller-interval" min="5" max="3600" value="30" required>
+              <small>How often to poll targets (5-3600 seconds)</small>
+            </label>
+
+            <label>
+              Connection Timeout (seconds)
+              <input type="number" id="poller-timeout" min="1" max="60" value="10" required>
+              <small>SSH/HTTP connection timeout (1-60 seconds)</small>
+            </label>
+
+            <label>
+              Ping Timeout (seconds)
+              <input type="number" id="poller-ping-timeout" min="1" max="10" value="1" required>
+              <small>Network ping timeout (1-10 seconds)</small>
+            </label>
+
+            <label>
+              API URL
+              <input type="url" id="poller-api-url" placeholder="http://localhost:8080/api.php" required>
+              <small>API endpoint for poller to send updates</small>
+            </label>
+
+            <label>
+              API Key
+              <input type="text" id="poller-api-key" placeholder="Enter API authentication key" required>
+              <small>Authentication key for API access</small>
+            </label>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+              <button type="submit">Save Settings</button>
+            </div>
+
+            <div id="poller-config-status" class="alert"></div>
+
+            <h4 style="margin-top: 30px;">Polling Control</h4>
+            <div style="display: flex; gap: 10px;">
+              <button type="button" id="start-polling-settings" class="success">▶ Start Polling</button>
+              <button type="button" id="stop-polling-settings" class="contrast">⏸ Stop Polling</button>
+              <span id="polling-status-settings" style="align-self: center; padding: 0 10px;"></span>
+            </div>
+          </form>
+        </article>
+
+        <!-- System Settings Panel -->
+        <article id="system-settings" class="settings-panel" style="display: none;">
+          <h3>System Information</h3>
+          
+          <h4>System Status</h4>
+          <div id="system-health-display" style="display: grid; gap: 10px;">
+            <!-- Health info will be loaded here -->
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="button" id="check-health-btn" class="secondary">Check System Health</button>
+            <button type="button" id="download-logs-btn" class="secondary">Download Logs</button>
+          </div>
+        </article>
       </div>
     </section>
   </div>
+
   <script src="/assets/app.js"></script>
 </body>
 </html>

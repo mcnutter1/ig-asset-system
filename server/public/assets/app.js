@@ -1,244 +1,65 @@
-const api = (a, method='GET', body=null, headers={}) => {
-  const url = 'api.php?action=' + encodeURIComponent(a);
+// API Helper
+const api = (action, method = 'GET', body = null) => {
+  const url = '/api.php?action=' + encodeURIComponent(action);
   return fetch(url, {
     method,
-    headers: Object.assign({'Content-Type': 'application/json'}, headers),
+    headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : null,
     credentials: 'include'
   }).then(r => r.json());
 };
 
 const el = sel => document.querySelector(sel);
-const list = el('#asset-list');
-const drawer = el('#drawer');
-const detail = el('#asset-detail');
+const elAll = sel => document.querySelectorAll(sel);
 
-// Check system status on page load
+// ============= SYSTEM STATUS =============
 const checkSystemStatus = () => {
-  console.log('Checking system status...');
-  api('system_status').then((status) => {
-    console.log('Bootstrap status:', status); // Debug log
-    
-    const bootstrapWarning = el('#bootstrap-warning');
-    const loginPanel = el('#login-panel');
-    
-    console.log('Bootstrap warning element:', bootstrapWarning);
-    console.log('Login panel element:', loginPanel);
-    
+  api('system_status').then(status => {
+    const warning = el('#bootstrap-warning');
+    const login = el('#login-panel');
+    const main = el('#main');
+
     if (!status.bootstrapped) {
-      console.log('System NOT bootstrapped - showing warning');
-      // System not bootstrapped - show warning
-      if (bootstrapWarning) bootstrapWarning.classList.remove('hidden');
-      if (loginPanel) loginPanel.classList.add('hidden');
-      el('#main')?.classList.add('hidden');
+      warning?.classList.remove('hidden');
+      login?.classList.add('hidden');
+      main?.classList.add('hidden');
       el('#settings')?.classList.add('hidden');
     } else {
-      console.log('System IS bootstrapped - hiding warning, showing login');
-      // System is bootstrapped - hide warning and show login
-      if (bootstrapWarning) {
-        bootstrapWarning.classList.add('hidden');
-        console.log('Bootstrap warning hidden');
-      }
-      if (loginPanel) {
-        loginPanel.classList.remove('hidden');
-        console.log('Login panel shown');
-      }
+      warning?.classList.add('hidden');
+      login?.classList.remove('hidden');
     }
-  }).catch((error) => {
-    console.error('API error:', error); // Debug log
-    // If API fails completely, show bootstrap warning
+  }).catch(() => {
     el('#bootstrap-warning')?.classList.remove('hidden');
-    el('#login-panel')?.classList.add('hidden');
-    el('#main')?.classList.add('hidden');
-    el('#settings')?.classList.add('hidden');
   });
 };
 
-// Initialize system status check
-checkSystemStatus();
-
-const renderAssetCard = (a) => {
-  const ips = (a.ips||[]).map(x=>x.ip).join(', ');
-  return `<div class="asset">
-    <h3>${a.name} <span class="badge">${a.type}</span></h3>
-    <div class="kv">ID: ${a.id}</div>
-    <div class="kv">MAC: ${a.mac||'-'}</div>
-    <div class="kv">IPs: ${ips||'-'}</div>
-    <div class="kv">Online: <span class="badge">${a.online_status}</span></div>
-    <div class="kv">Last Seen: ${a.last_seen||'-'}</div>
-    <div class="flex" style="margin-top:8px">
-      <button data-id="${a.id}" class="view">View</button>
-    </div>
-  </div>`;
-};
-
-const renderAssets = (items=[]) => {
-  list.innerHTML = items.map(renderAssetCard).join('');
-  list.querySelectorAll('.view').forEach(b => b.addEventListener('click', () => openDetail(b.dataset.id)));
-};
-
-const openDetail = (id) => api('asset_get&id='+id).then(a => {
-  drawer.classList.remove('hidden');
-  detail.innerHTML = `
-    <h2>${a.name}</h2>
-    <div class="flex">
-      <span class="badge">${a.type}</span>
-      <span class="badge">Owner: ${a.owner_user_id || '-'}</span>
-      <span class="badge">Online: ${a.online_status}</span>
-    </div>
-    <h3>Identifiers</h3>
-    <div class="kv">ID: ${a.id}</div>
-    <div class="kv">MAC: ${a.mac || '-'}</div>
-    <div class="kv">IPs: ${(a.ips||[]).map(x=>x.ip).join(', ') || '-'}</div>
-    <h3>Attributes (JSON)</h3>
-    <pre>${JSON.stringify(a.attributes || {}, null, 2)}</pre>
-    <h3>Timeline</h3>
-    <pre>${(a.changes||[]).map(c => `[${c.changed_at}] ${c.actor} (${c.source}) changed ${c.field}`).join('\n') || 'No changes'}</pre>
-    <h3>Actions</h3>
-    <button id="edit-btn">Edit</button>
-    <button id="delete-btn" style="background:#3a1020;border-color:#5a1a33">Delete</button>
-  `;
-  el('#edit-btn').onclick = () => editAsset(a);
-  el('#delete-btn').onclick = () => {
-    if (confirm('Delete this asset?')) api('asset_delete&id='+a.id, 'DELETE').then(()=>{ drawer.classList.add('hidden'); load(); });
-  };
-});
-
-const editAsset = (a) => {
-  const name = prompt('Name', a.name);
-  if (name===null) return;
-  const mac = prompt('MAC', a.mac||'');
-  const ips = prompt('IP list (comma-separated)', (a.ips||[]).map(x=>x.ip).join(', '));
-  const attrs = prompt('Attributes JSON', JSON.stringify(a.attributes||{}, null, 2));
-  const payload = { id:a.id, name, mac, ips: ips? ips.split(',').map(x=>x.trim()).filter(Boolean):[], attributes: JSON.parse(attrs||'{}') };
-  api('asset_update','POST',payload).then(()=>openDetail(a.id));
-};
-
-const load = () => {
-  const q = el('#search').value.trim();
-  api('assets'+(q? '&q='+encodeURIComponent(q):'')).then(renderAssets);
-};
-
-// Login wiring
+// ============= AUTHENTICATION =============
 el('#login-btn').onclick = () => {
-  const username = el('#username').value.trim();
-  const password = el('#password').value.trim();
-  api('login','POST',{username,password}).then((r)=>{
-    el('#login-panel').classList.add('hidden');
-    el('#main').classList.remove('hidden');
-    el('#user-info').textContent = r.user.display_name || r.user.username;
-    
-    // Show admin controls for admin users
-    if (r.user.role === 'admin') {
-      el('#admin-controls').classList.remove('hidden');
-    }
-    
-    load();
-  }).catch(()=> el('#login-msg').textContent = 'Login failed');
-};
+  const username = el('#username').value;
+  const password = el('#password').value;
 
-el('#refresh').onclick = load;
-el('#new-asset').onclick = () => {
-  const name = prompt('Asset name'); if (!name) return;
-  api('asset_create','POST',{name}).then(()=>load());
-};
-el('#search').addEventListener('keydown', (e)=>{ if (e.key==='Enter') load(); });
-el('.close').onclick = ()=> drawer.classList.add('hidden');
-
-// Settings functionality
-el('#settings-btn').onclick = () => {
-  el('#main').classList.add('hidden');
-  el('#settings').classList.remove('hidden');
-  loadLdapSettings();
-};
-
-el('#back-to-main').onclick = () => {
-  el('#settings').classList.add('hidden');
-  el('#main').classList.remove('hidden');
-};
-
-const loadLdapSettings = () => {
-  api('settings_get&category=ldap').then((settings) => {
-    el('#ldap-enabled').checked = settings.enabled?.value === 'true';
-    el('#ldap-host').value = settings.host?.value || '';
-    el('#ldap-port').value = settings.port?.value || '389';
-    el('#ldap-bind-dn').value = settings.bind_dn?.value || '';
-    el('#ldap-bind-password').value = settings.bind_password?.value || '';
-    el('#ldap-base-dn').value = settings.base_dn?.value || '';
-    el('#ldap-user-attr').value = settings.user_attr?.value || 'sAMAccountName';
-  });
-};
-
-el('#ldap-form').onsubmit = (e) => {
-  e.preventDefault();
-  const settings = {
-    enabled: el('#ldap-enabled').checked ? 'true' : 'false',
-    host: el('#ldap-host').value,
-    port: el('#ldap-port').value,
-    bind_dn: el('#ldap-bind-dn').value,
-    bind_password: el('#ldap-bind-password').value,
-    base_dn: el('#ldap-base-dn').value,
-    user_attr: el('#ldap-user-attr').value
-  };
-  
-  api('settings_update', 'POST', { category: 'ldap', settings }).then((r) => {
+  api('login', 'POST', { username, password }).then(r => {
     if (r.success) {
-      showLdapStatus('Settings saved successfully', 'success');
+      el('#login-panel').classList.add('hidden');
+      el('#main').classList.remove('hidden');
+      el('#settings-btn').classList.remove('hidden');
+      loadAssets();
+      updatePollingStatus();
     } else {
-      showLdapStatus('Failed to save settings', 'error');
+      el('#login-msg').textContent = 'Login failed: ' + r.message;
+      el('#login-msg').style.color = '#ff6b6b';
     }
   });
 };
 
-el('#test-ldap').onclick = () => {
-  const settings = {
-    host: { value: el('#ldap-host').value },
-    port: { value: el('#ldap-port').value },
-    bind_dn: { value: el('#ldap-bind-dn').value },
-    bind_password: { value: el('#ldap-bind-password').value },
-    base_dn: { value: el('#ldap-base-dn').value },
-    user_attr: { value: el('#ldap-user-attr').value }
-  };
-  
-  api('ldap_test', 'POST', { settings }).then((result) => {
-    showLdapStatus(result.message, result.success ? 'success' : 'error');
-  });
-};
+el('#settings-btn').onclick = () => showSettings();
+el('#back-to-main').onclick = () => hideSettings();
 
-el('#import-ldap').onclick = () => {
-  if (!confirm('Import users from LDAP? This may take a while.')) return;
-  
-  api('ldap_import', 'POST', {}).then((result) => {
-    showLdapStatus(result.message, result.success ? 'success' : 'error');
-  });
-};
-
-const showLdapStatus = (message, type) => {
-  const status = el('#ldap-status');
-  status.textContent = message;
-  status.className = type;
-  setTimeout(() => {
-    status.textContent = '';
-    status.className = '';
-  }, 5000);
-};
-
-// Modal management
-const showModal = (title, content) => {
-  el('#modal-title').textContent = title;
-  el('#modal-content').innerHTML = content;
-  el('#modal').classList.remove('hidden');
-};
-
-const hideModal = () => {
-  el('#modal').classList.add('hidden');
-};
-
-// Modern settings management
+// ============= SETTINGS MANAGEMENT =============
 const showSettings = () => {
   el('#main').classList.add('hidden');
   el('#settings').classList.remove('hidden');
-  loadModernSettingsContent();
+  loadSettingsData();
 };
 
 const hideSettings = () => {
@@ -246,195 +67,18 @@ const hideSettings = () => {
   el('#main').classList.remove('hidden');
 };
 
-const loadModernSettingsContent = () => {
-  const content = `
-    <div class="settings-nav">
-      <button class="settings-tab active" data-tab="ldap">LDAP Settings</button>
-      <button class="settings-tab" data-tab="poller">Polling Configuration</button>
-      <button class="settings-tab" data-tab="system">System Settings</button>
-    </div>
-    <div class="settings-content">
-      <div id="ldap-settings" class="settings-panel active">
-        <h3>LDAP Configuration</h3>
-        <form id="modern-ldap-form">
-          <div class="form-group">
-            <label>LDAP Server:</label>
-            <input type="text" id="modern-ldap-server" placeholder="ldap://domain.com:389">
-          </div>
-          <div class="form-group">
-            <label>Base DN:</label>
-            <input type="text" id="modern-ldap-base-dn" placeholder="dc=domain,dc=com">
-          </div>
-          <div class="form-group">
-            <label>Bind DN:</label>
-            <input type="text" id="modern-ldap-bind-dn" placeholder="cn=admin,dc=domain,dc=com">
-          </div>
-          <div class="form-group">
-            <label>Bind Password:</label>
-            <input type="password" id="modern-ldap-bind-password">
-          </div>
-          <div class="form-group">
-            <label>User Filter:</label>
-            <input type="text" id="modern-ldap-user-filter" placeholder="(objectClass=person)">
-          </div>
-          <div class="form-group">
-            <label>Username Attribute:</label>
-            <input type="text" id="modern-ldap-user-attr" placeholder="sAMAccountName">
-          </div>
-          <div class="form-actions">
-            <button type="button" onclick="testModernLdapConnection()">Test Connection</button>
-            <button type="button" onclick="importModernLdapUsers()">Import Users</button>
-            <button type="submit">Save LDAP Settings</button>
-          </div>
-          <div id="modern-ldap-status" class="status-message"></div>
-        </form>
-      </div>
-      
-      <div id="poller-settings" class="settings-panel">
-        <h3>Polling Configuration</h3>
-        <form id="poller-form">
-          <div class="form-group">
-            <label>Polling Interval (seconds):</label>
-            <input type="number" id="poller-interval" min="5" max="3600" value="30">
-            <small>How often to poll targets (5-3600 seconds)</small>
-          </div>
-          <div class="form-group">
-            <label>Connection Timeout (seconds):</label>
-            <input type="number" id="poller-timeout" min="1" max="60" value="10">
-            <small>SSH/HTTP connection timeout (1-60 seconds)</small>
-          </div>
-          <div class="form-group">
-            <label>Ping Timeout (seconds):</label>
-            <input type="number" id="poller-ping-timeout" min="1" max="10" value="1">
-            <small>Network ping timeout (1-10 seconds)</small>
-          </div>
-          <div class="form-group">
-            <label>API URL:</label>
-            <input type="url" id="poller-api-url" placeholder="http://localhost:8080/api.php">
-            <small>API endpoint for poller to send updates</small>
-          </div>
-          <div class="form-group">
-            <label>API Key:</label>
-            <input type="text" id="poller-api-key" placeholder="Enter API authentication key">
-            <small>Authentication key for API access</small>
-          </div>
-          <div class="form-actions">
-            <button type="submit">Save Polling Settings</button>
-          </div>
-          <div id="poller-config-status" class="status-message"></div>
-        </form>
-        
-        <div class="polling-control">
-          <h4>Polling Control</h4>
-          <div class="control-buttons">
-            <button id="start-polling-settings" onclick="startPollingFromSettings()">Start Polling</button>
-            <button id="stop-polling-settings" onclick="stopPollingFromSettings()">Stop Polling</button>
-            <span id="polling-status-settings">Status: Unknown</span>
-          </div>
-        </div>
-      </div>
-      
-      <div id="system-settings" class="settings-panel">
-        <h3>System Settings</h3>
-        <div class="system-info">
-          <h4>System Status</h4>
-          <div id="system-health-display"></div>
-        </div>
-        <div class="system-actions">
-          <button onclick="checkSystemHealth()">Check System Health</button>
-          <button onclick="downloadSystemLogs()">Download Logs</button>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  el('#settings-container').innerHTML = content;
-  
-  // Load current settings
-  loadModernLdapSettings();
-  loadPollerConfigSettings();
-  updatePollingStatusInSettings();
-  
-  // Setup tab switching
-  document.querySelectorAll('.settings-tab').forEach(tab => {
-    tab.onclick = () => switchSettingsTab(tab.dataset.tab);
-  });
-};
-
-const switchSettingsTab = (tabName) => {
-  document.querySelectorAll('.settings-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === tabName);
-  });
-  
-  document.querySelectorAll('.settings-panel').forEach(panel => {
-    panel.classList.toggle('active', panel.id === tabName + '-settings');
-  });
-};
-
-// Modern LDAP functions
-const loadModernLdapSettings = () => {
+const loadSettingsData = () => {
   api('settings_get&category=ldap').then(settings => {
     if (settings) {
-      el('#modern-ldap-server').value = settings.host?.value || '';
-      el('#modern-ldap-base-dn').value = settings.base_dn?.value || '';
-      el('#modern-ldap-bind-dn').value = settings.bind_dn?.value || '';
-      el('#modern-ldap-bind-password').value = settings.bind_password?.value || '';
-      el('#modern-ldap-user-filter').value = settings.user_filter?.value || '';
-      el('#modern-ldap-user-attr').value = settings.user_attr?.value || '';
+      el('#ldap-server').value = settings.host?.value || '';
+      el('#ldap-base-dn').value = settings.base_dn?.value || '';
+      el('#ldap-bind-dn').value = settings.bind_dn?.value || '';
+      el('#ldap-bind-password').value = settings.bind_password?.value || '';
+      el('#ldap-user-filter').value = settings.user_filter?.value || '';
+      el('#ldap-user-attr').value = settings.user_attr?.value || '';
     }
   });
-  
-  const form = el('#modern-ldap-form');
-  if (form) {
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      saveModernLdapSettings();
-    };
-  }
-};
 
-const saveModernLdapSettings = () => {
-  const settings = {
-    host: el('#modern-ldap-server').value,
-    base_dn: el('#modern-ldap-base-dn').value,
-    bind_dn: el('#modern-ldap-bind-dn').value,
-    bind_password: el('#modern-ldap-bind-password').value,
-    user_filter: el('#modern-ldap-user-filter').value,
-    user_attr: el('#modern-ldap-user-attr').value
-  };
-  
-  api('settings_update', 'POST', { category: 'ldap', settings }).then(response => {
-    showStatusMessage('modern-ldap-status', response.success ? 'LDAP settings saved successfully' : 'Failed to save LDAP settings', response.success ? 'success' : 'error');
-  });
-};
-
-const testModernLdapConnection = () => {
-  const settings = {
-    host: { value: el('#modern-ldap-server').value },
-    base_dn: { value: el('#modern-ldap-base-dn').value },
-    bind_dn: { value: el('#modern-ldap-bind-dn').value },
-    bind_password: { value: el('#modern-ldap-bind-password').value },
-    user_filter: { value: el('#modern-ldap-user-filter').value },
-    user_attr: { value: el('#modern-ldap-user-attr').value }
-  };
-  
-  showStatusMessage('modern-ldap-status', 'Testing LDAP connection...', 'info');
-  api('ldap_test', 'POST', { settings }).then(result => {
-    showStatusMessage('modern-ldap-status', result.message, result.success ? 'success' : 'error');
-  });
-};
-
-const importModernLdapUsers = () => {
-  if (!confirm('Import users from LDAP? This may take a while.')) return;
-  
-  showStatusMessage('modern-ldap-status', 'Importing LDAP users...', 'info');
-  api('ldap_import', 'POST', {}).then(result => {
-    showStatusMessage('modern-ldap-status', result.message, result.success ? 'success' : 'error');
-  });
-};
-
-// Poller configuration functions
-const loadPollerConfigSettings = () => {
   api('poller_config').then(config => {
     el('#poller-interval').value = config.interval || 30;
     el('#poller-timeout').value = config.timeout || 10;
@@ -442,110 +86,287 @@ const loadPollerConfigSettings = () => {
     el('#poller-api-url').value = config.api_url || '';
     el('#poller-api-key').value = config.api_key || '';
   });
-  
-  const form = el('#poller-form');
-  if (form) {
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      savePollerConfigSettings();
+
+  updatePollingStatusInSettings();
+  checkSystemHealth();
+  setupSettingsListeners();
+};
+
+const setupSettingsListeners = () => {
+  el('#ldap-form').onsubmit = (e) => {
+    e.preventDefault();
+    const settings = {
+      host: el('#ldap-server').value,
+      base_dn: el('#ldap-base-dn').value,
+      bind_dn: el('#ldap-bind-dn').value,
+      bind_password: el('#ldap-bind-password').value,
+      user_filter: el('#ldap-user-filter').value,
+      user_attr: el('#ldap-user-attr').value
     };
+    api('settings_update', 'POST', { category: 'ldap', settings }).then(r => {
+      showAlert('ldap-status', r.success ? 'LDAP settings saved' : 'Failed to save', r.success ? 'success' : 'error');
+    });
+  };
+
+  el('#test-ldap').onclick = () => {
+    const settings = {
+      host: { value: el('#ldap-server').value },
+      base_dn: { value: el('#ldap-base-dn').value },
+      bind_dn: { value: el('#ldap-bind-dn').value },
+      bind_password: { value: el('#ldap-bind-password').value },
+      user_filter: { value: el('#ldap-user-filter').value },
+      user_attr: { value: el('#ldap-user-attr').value }
+    };
+    showAlert('ldap-status', 'Testing connection...', 'info');
+    api('ldap_test', 'POST', { settings }).then(r => {
+      showAlert('ldap-status', r.message, r.success ? 'success' : 'error');
+    });
+  };
+
+  el('#import-ldap').onclick = () => {
+    if (!confirm('Import users from LDAP? This may take a while.')) return;
+    showAlert('ldap-status', 'Importing users...', 'info');
+    api('ldap_import', 'POST', {}).then(r => {
+      showAlert('ldap-status', r.message, r.success ? 'success' : 'error');
+    });
+  };
+
+  el('#poller-form').onsubmit = (e) => {
+    e.preventDefault();
+    const config = {
+      interval: el('#poller-interval').value,
+      timeout: el('#poller-timeout').value,
+      ping_timeout: el('#poller-ping-timeout').value,
+      api_url: el('#poller-api-url').value,
+      api_key: el('#poller-api-key').value
+    };
+    api('poller_config_update', 'POST', config).then(r => {
+      showAlert('poller-config-status', r.success ? 'Polling settings saved' : 'Failed to save', r.success ? 'success' : 'error');
+    });
+  };
+
+  el('#start-polling-settings').onclick = () => {
+    api('poller_start', 'POST').then(() => updatePollingStatusInSettings());
+  };
+
+  el('#stop-polling-settings').onclick = () => {
+    api('poller_stop', 'POST').then(() => updatePollingStatusInSettings());
+  };
+
+  el('#check-health-btn').onclick = checkSystemHealth;
+
+  elAll('.settings-tab').forEach(tab => {
+    tab.onclick = (e) => {
+      e.preventDefault();
+      const tabName = tab.dataset.tab;
+      elAll('.settings-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      elAll('.settings-panel').forEach(p => p.style.display = 'none');
+      el('#' + tabName + '-settings').style.display = 'block';
+    };
+  });
+};
+
+const showAlert = (elementId, message, type) => {
+  const alert = el('#' + elementId);
+  if (alert) {
+    alert.textContent = message;
+    alert.className = 'alert show ' + type;
+    setTimeout(() => alert.classList.remove('show'), 5000);
   }
 };
 
-const savePollerConfigSettings = () => {
-  const config = {
-    interval: el('#poller-interval').value,
-    timeout: el('#poller-timeout').value,
-    ping_timeout: el('#poller-ping-timeout').value,
-    api_url: el('#poller-api-url').value,
-    api_key: el('#poller-api-key').value
-  };
-  
-  api('poller_config_update', 'POST', config).then(response => {
-    showStatusMessage('poller-config-status', response.success ? 'Polling settings saved successfully' : 'Failed to save polling settings', response.success ? 'success' : 'error');
-  });
-};
-
-const startPollingFromSettings = () => {
-  api('poller_start', 'POST').then(response => {
-    if (response.success) {
-      updatePollingStatusInSettings();
-    } else {
-      showStatusMessage('poller-config-status', 'Failed to start poller: ' + response.message, 'error');
+// ============= POLLING STATUS =============
+const updatePollingStatus = () => {
+  api('poller_status').then(status => {
+    const statusEl = el('#polling-status');
+    const startBtn = el('#start-polling');
+    const stopBtn = el('#stop-polling');
+    const text = status.status === 'running' 
+      ? `Polling: Running (${status.targets_count} targets)`
+      : `Polling: Stopped (${status.targets_count} targets)`;
+    if (statusEl) {
+      statusEl.textContent = text;
+      statusEl.style.color = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
     }
-  });
-};
-
-const stopPollingFromSettings = () => {
-  api('poller_stop', 'POST').then(response => {
-    if (response.success) {
-      updatePollingStatusInSettings();
-    } else {
-      showStatusMessage('poller-config-status', 'Failed to stop poller: ' + response.message, 'error');
-    }
+    if (startBtn) startBtn.disabled = status.status === 'running';
+    if (stopBtn) stopBtn.disabled = status.status !== 'running';
   });
 };
 
 const updatePollingStatusInSettings = () => {
   api('poller_status').then(status => {
-    const statusElSettings = el('#polling-status-settings');
-    const startBtnSettings = el('#start-polling-settings');
-    const stopBtnSettings = el('#stop-polling-settings');
-    
-    const statusText = status.status === 'running' 
-      ? `Status: Running (${status.targets_count} targets)`
-      : `Status: Stopped (${status.targets_count} targets)`;
-    const statusColor = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
-    
-    if (statusElSettings) {
-      statusElSettings.textContent = statusText;
-      statusElSettings.style.color = statusColor;
+    const statusEl = el('#polling-status-settings');
+    const startBtn = el('#start-polling-settings');
+    const stopBtn = el('#stop-polling-settings');
+    const text = status.status === 'running' 
+      ? `Running (${status.targets_count} targets)`
+      : `Stopped (${status.targets_count} targets)`;
+    if (statusEl) {
+      statusEl.textContent = text;
+      statusEl.style.color = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
     }
-    
-    const isRunning = status.status === 'running';
-    if (startBtnSettings) startBtnSettings.disabled = isRunning;
-    if (stopBtnSettings) stopBtnSettings.disabled = !isRunning;
-    
-    if (status.last_run && statusElSettings) {
-      statusElSettings.title = `Last run: ${status.last_run}`;
-    }
-  }).catch(() => {
-    const statusElSettings = el('#polling-status-settings');
-    if (statusElSettings) {
-      statusElSettings.textContent = 'Status: Error';
-      statusElSettings.style.color = '#ff6b6b';
-    }
+    if (startBtn) startBtn.disabled = status.status === 'running';
+    if (stopBtn) stopBtn.disabled = status.status !== 'running';
   });
 };
 
-// System health functions
+el('#start-polling').onclick = () => {
+  api('poller_start', 'POST').then(() => updatePollingStatus());
+};
+
+el('#stop-polling').onclick = () => {
+  api('poller_stop', 'POST').then(() => updatePollingStatus());
+};
+
+// ============= SYSTEM HEALTH =============
 const checkSystemHealth = () => {
   api('system_health').then(health => {
-    const healthEl = el('#system-health-display');
-    if (healthEl) {
-      healthEl.innerHTML = `
-        <div class="health-item">Database: ${health.database ? '✅ Connected' : '❌ Error'}</div>
-        <div class="health-item">PHP Version: ${health.php_version || 'Unknown'}</div>
-        <div class="health-item">Disk Space: ${health.disk_free || 'Unknown'}</div>
-        <div class="health-item">Memory Usage: ${health.memory_usage || 'Unknown'}</div>
+    const container = el('#system-health-display');
+    if (container) {
+      container.innerHTML = `
+        <div class="health-item"><strong>Database:</strong> ${health.database ? '✅ Connected' : '❌ Error'}</div>
+        <div class="health-item"><strong>PHP Version:</strong> ${health.php_version || 'Unknown'}</div>
+        <div class="health-item"><strong>Disk Space:</strong> ${health.disk_free || 'Unknown'}</div>
+        <div class="health-item"><strong>Memory Usage:</strong> ${health.memory_usage || 'Unknown'}</div>
       `;
     }
   });
 };
 
-const downloadSystemLogs = () => {
-  alert('Log download functionality would be implemented here');
+// ============= ASSET MANAGEMENT =============
+const loadAssets = () => {
+  api('assets').then(assets => {
+    const grid = el('#asset-list');
+    grid.innerHTML = assets.map(a => `
+      <div class="asset-card">
+        <h4>${a.name} <span class="badge">${a.type}</span></h4>
+        <div class="kv"><strong>ID:</strong> <span>${a.id}</span></div>
+        <div class="kv"><strong>MAC:</strong> <span>${a.mac || '-'}</span></div>
+        <div class="kv"><strong>IPs:</strong> <span>${(a.ips || []).map(x => x.ip).join(', ') || '-'}</span></div>
+        <div class="kv"><strong>Status:</strong> <span class="badge">${a.online_status}</span></div>
+        <div style="display: flex; gap: 10px; margin-top: 12px;">
+          <button onclick="viewAsset(${a.id})" class="secondary" style="width: auto; padding: 6px 12px;">View</button>
+          <button onclick="editAsset(${a.id})" class="secondary" style="width: auto; padding: 6px 12px;">Edit</button>
+          <button onclick="deleteAsset(${a.id})" class="contrast" style="width: auto; padding: 6px 12px;">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  });
 };
 
-// Utility function for status messages
-const showStatusMessage = (elementId, message, type) => {
-  const statusEl = el('#' + elementId);
-  if (statusEl) {
-    statusEl.textContent = message;
-    statusEl.className = 'status-message ' + type;
-    setTimeout(() => {
-      statusEl.textContent = '';
-      statusEl.className = 'status-message';
-    }, 5000);
-  }
+const viewAsset = (id) => {
+  api(`assets/${id}`).then(a => {
+    const drawer = el('#drawer');
+    const content = el('#asset-detail');
+    content.innerHTML = `
+      <h3>${a.name}</h3>
+      <div class="kv"><strong>Type:</strong> ${a.type}</div>
+      <div class="kv"><strong>MAC:</strong> ${a.mac || '-'}</div>
+      <div class="kv"><strong>IPs:</strong> ${(a.ips || []).map(x => x.ip).join(', ') || '-'}</div>
+      <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
+      <div class="kv"><strong>Created:</strong> ${a.created_at}</div>
+      <div class="kv"><strong>Updated:</strong> ${a.updated_at}</div>
+      <pre>${JSON.stringify(a.attributes, null, 2)}</pre>
+    `;
+    drawer.classList.remove('hidden');
+  });
 };
+
+const editAsset = (id) => {
+  api(`assets/${id}`).then(a => {
+    el('#asset-id').value = a.id;
+    el('#asset-name').value = a.name;
+    el('#asset-type').value = a.type;
+    el('#asset-mac').value = a.mac || '';
+    el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
+    el('#asset-owner').value = a.owner_id || '';
+    el('#asset-attributes').value = JSON.stringify(a.attributes, null, 2);
+    el('#modal-title').textContent = 'Edit Asset';
+    el('#asset-modal').showModal();
+  });
+};
+
+const deleteAsset = (id) => {
+  api(`assets/${id}`).then(a => {
+    el('#delete-asset-name').textContent = a.name;
+    el('#delete-modal').dataset.assetId = id;
+    el('#delete-modal').showModal();
+  });
+};
+
+el('#new-asset').onclick = () => {
+  el('#asset-id').value = '';
+  el('#asset-name').value = '';
+  el('#asset-type').value = '';
+  el('#asset-mac').value = '';
+  el('#asset-ips').value = '';
+  el('#asset-owner').value = '';
+  el('#asset-attributes').value = '';
+  el('#modal-title').textContent = 'Add Asset';
+  el('#asset-modal').showModal();
+};
+
+el('#asset-form').onsubmit = (e) => {
+  e.preventDefault();
+  const id = el('#asset-id').value;
+  const data = {
+    name: el('#asset-name').value,
+    type: el('#asset-type').value,
+    mac: el('#asset-mac').value || null,
+    ips: el('#asset-ips').value.split(',').map(ip => ({ ip: ip.trim() })),
+    owner_id: el('#asset-owner').value || null,
+    attributes: el('#asset-attributes').value ? JSON.parse(el('#asset-attributes').value) : {}
+  };
+  const method = id ? 'PUT' : 'POST';
+  const action = id ? `assets/${id}` : 'assets';
+  api(action, method, data).then(r => {
+    if (r.success) {
+      el('#asset-modal').close();
+      loadAssets();
+    } else {
+      alert('Error: ' + r.message);
+    }
+  });
+};
+
+el('#confirm-delete').onclick = () => {
+  const id = el('#delete-modal').dataset.assetId;
+  api(`assets/${id}`, 'DELETE').then(r => {
+    if (r.success) {
+      el('#delete-modal').close();
+      loadAssets();
+    } else {
+      alert('Error: ' + r.message);
+    }
+  });
+};
+
+el('#refresh').onclick = loadAssets;
+
+el('#search').addEventListener('keyup', () => {
+  const q = el('#search').value.toLowerCase();
+  elAll('.asset-card').forEach(card => {
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
+elAll('.modal-close, .modal-cancel').forEach(btn => {
+  btn.onclick = () => {
+    if (btn.closest('dialog')) {
+      btn.closest('dialog').close();
+    }
+  };
+});
+
+el('#drawer .close').onclick = () => {
+  el('#drawer').classList.add('hidden');
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  checkSystemStatus();
+  updatePollingStatus();
+  setInterval(updatePollingStatus, 30000);
+});
