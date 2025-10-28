@@ -374,9 +374,9 @@ const loadAssets = () => {
           <td><span style="color: ${statusColor};">● ${a.online_status}</span></td>
           <td style="font-size: 0.85em; color: #888;">${lastSeen}</td>
           <td style="white-space: nowrap;">
-            <button onclick="viewAsset(${a.id})" class="secondary" style="padding: 4px 12px; margin-right: 5px;">View</button>
-            <button onclick="editAsset(${a.id})" class="secondary" style="padding: 4px 12px; margin-right: 5px;">Edit</button>
-            <button onclick="deleteAsset(${a.id})" class="contrast" style="padding: 4px 12px;">Delete</button>
+            <button onclick="viewAsset('${a.id}')" class="secondary" style="padding: 4px 12px; margin-right: 5px;">View</button>
+            <button onclick="editAsset('${a.id}')" class="secondary" style="padding: 4px 12px; margin-right: 5px;">Edit</button>
+            <button onclick="deleteAsset('${a.id}')" class="contrast" style="padding: 4px 12px;">Delete</button>
           </td>
         </tr>
       `;
