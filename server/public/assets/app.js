@@ -1,18 +1,23 @@
 // API Helper
-const api = (action, method = 'GET', body = null) => {
+const api = (action, method = 'GET', body = null, timeout = 30000) => {
   const url = '/api.php?action=' + encodeURIComponent(action);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
   return fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : null,
     credentials: 'include',
-    signal: AbortSignal.timeout(10000) // 10 second timeout
+    signal: controller.signal
   }).then(r => {
+    clearTimeout(timeoutId);
     if (!r.ok && r.status !== 401) {
       throw new Error(`HTTP ${r.status}: ${r.statusText}`);
     }
     return r.json();
   }).catch(err => {
+    clearTimeout(timeoutId);
     console.error('API Error:', action, err);
     throw err;
   });
@@ -50,6 +55,9 @@ const setupAuthHandlers = () => {
     const username = el('#username').value;
     const password = el('#password').value;
 
+    el('#login-msg').textContent = 'Logging in...';
+    el('#login-msg').style.color = '#ffaa00';
+
     api('login', 'POST', { username, password }).then(r => {
       if (r.ok && r.user) {
         el('#login-panel').classList.add('hidden');
@@ -62,7 +70,16 @@ const setupAuthHandlers = () => {
         el('#login-msg').style.color = '#ff6b6b';
       }
     }).catch(err => {
-      el('#login-msg').textContent = 'Login failed: Network error';
+      console.error('Login error:', err);
+      let errorMsg = 'Login failed: ';
+      if (err.name === 'AbortError') {
+        errorMsg += 'Request timeout - server may be slow or unresponsive';
+      } else if (err.message.includes('Failed to fetch')) {
+        errorMsg += 'Cannot connect to server - is it running?';
+      } else {
+        errorMsg += err.message || 'Network error';
+      }
+      el('#login-msg').textContent = errorMsg;
       el('#login-msg').style.color = '#ff6b6b';
     });
   };
