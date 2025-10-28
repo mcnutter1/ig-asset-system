@@ -73,6 +73,14 @@ class DatabasePoller:
                 }
             }
             
+            # Check if we have a valid agent token, if not try to get/create one
+            agent_token = self.ensure_agent_token(conn)
+            if agent_token:
+                config['api']['api_key'] = agent_token
+                print(f"Using agent token: {agent_token[:10]}...")
+            else:
+                print(f"WARNING: No valid agent token found, using API key from settings: {config['api']['api_key'][:10]}...")
+            
             conn.close()
             return config
             
@@ -91,6 +99,32 @@ class DatabasePoller:
                     'api_key': 'POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
                 }
             }
+    
+    def ensure_agent_token(self, conn):
+        """Ensure we have a valid agent token, create if needed"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            
+            # Check if 'poller' agent exists
+            cursor.execute("SELECT token FROM agents WHERE name='poller' AND status='active'")
+            result = cursor.fetchone()
+            
+            if result:
+                return result['token']
+            
+            # Check if there's a token in settings we can use to register
+            cursor.execute("SELECT value FROM settings WHERE category='poller' AND name='api_key'")
+            api_key_result = cursor.fetchone()
+            
+            if not api_key_result:
+                print("No API key found in settings, cannot auto-register agent")
+                return None
+                
+            return api_key_result['value']
+            
+        except Exception as e:
+            print(f"Error checking agent token: {e}")
+            return None
     
     def get_db_connection(self):
         """Get database connection"""
@@ -273,13 +307,32 @@ class DatabasePoller:
         }
         
         try:
+            self.log_to_db('info', f"Pushing update for {asset.get('name', 'unknown')}: {url}", asset.get('name'))
             response = requests.post(url, json=payload, timeout=self.poller_config['timeout'])
+            
+            self.log_to_db('info', f"API Response Status: {response.status_code}", asset.get('name'))
+            
             if response.status_code == 200:
-                print(f"Updated asset: {asset['name']}")
+                self.log_to_db('success', f"Successfully updated asset: {asset.get('name')}", asset.get('name'))
+            elif response.status_code == 401:
+                try:
+                    error_data = response.json()
+                    self.log_to_db('error', f"Authentication failed (401): {error_data}. API Key: {self.api_config['api_key'][:10]}...", asset.get('name'))
+                except:
+                    self.log_to_db('error', f"Authentication failed (401): {response.text}. API Key: {self.api_config['api_key'][:10]}...", asset.get('name'))
             else:
-                print(f"Failed to update asset: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    self.log_to_db('error', f"Failed to update asset (HTTP {response.status_code}): {error_data}", asset.get('name'))
+                except:
+                    self.log_to_db('error', f"Failed to update asset (HTTP {response.status_code}): {response.text}", asset.get('name'))
+                    
+        except requests.exceptions.Timeout:
+            self.log_to_db('error', f"Timeout pushing update to API (timeout={self.poller_config['timeout']}s)", asset.get('name'))
+        except requests.exceptions.ConnectionError as e:
+            self.log_to_db('error', f"Connection error pushing update: {str(e)}", asset.get('name'))
         except Exception as e:
-            print(f"Error pushing update: {e}")
+            self.log_to_db('error', f"Error pushing update: {type(e).__name__}: {str(e)}", asset.get('name'))
     
     def poll_targets(self):
         """Poll all configured targets"""
