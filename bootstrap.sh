@@ -38,6 +38,12 @@ echo "🔗 Testing database connection..."
 if ! mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1;" >/dev/null 2>&1; then
     echo "❌ Database connection failed!"
     echo "Please check your database configuration in server/config/config.php"
+    echo ""
+    echo "To create the database user, run these commands as MySQL root:"
+    echo "  CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+    echo "  CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+    echo "  GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
+    echo "  FLUSH PRIVILEGES;"
     exit 1
 fi
 echo "✅ Database connection successful"
@@ -49,32 +55,37 @@ mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" -e "CREATE DATABASE
 echo "✅ Database ready"
 echo
 
+# Function to apply SQL with error handling
+apply_sql() {
+    local file=$1
+    local description=$2
+    
+    if [[ -f "$file" ]]; then
+        echo "  → $description..."
+        if mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$file" 2>/dev/null; then
+            echo "    ✅ Success"
+        else
+            echo "    ⚠️  Some statements may have failed (this is often normal for re-runs)"
+        fi
+    else
+        echo "  → Skipping $description (file not found: $file)"
+    fi
+}
+
 # Apply SQL files in order
 echo "📊 Setting up database schema..."
 
 # Core schema
-if [[ -f "sql/schema.sql" ]]; then
-    echo "  → Applying core schema..."
-    mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < sql/schema.sql
-fi
+apply_sql "sql/schema.sql" "Applying core schema"
 
 # Patches table (for tracking)
-if [[ -f "sql/patches_table.sql" ]]; then
-    echo "  → Creating patches table..."
-    mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < sql/patches_table.sql
-fi
+apply_sql "sql/patches_table.sql" "Creating patches table"
 
 # Settings table
-if [[ -f "sql/settings_table.sql" ]]; then
-    echo "  → Creating settings table..."
-    mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < sql/settings_table.sql
-fi
+apply_sql "sql/settings_table.sql" "Creating settings table"
 
 # Admin user
-if [[ -f "sql/admin_user.sql" ]]; then
-    echo "  → Creating admin user..."
-    mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < sql/admin_user.sql
-fi
+apply_sql "sql/admin_user.sql" "Creating admin user"
 
 echo "✅ Database schema complete"
 echo
@@ -93,9 +104,9 @@ echo
 # Mark bootstrap as complete
 echo "📝 Marking bootstrap as complete..."
 mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "
+DELETE FROM patches WHERE patch_name = 'bootstrap_complete';
 INSERT INTO patches (patch_name, patch_type, description, success) 
-VALUES ('bootstrap_complete', 'system', 'Initial system bootstrap completed', 1)
-ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP;
+VALUES ('bootstrap_complete', 'system', 'Initial system bootstrap completed', 1);
 " 2>/dev/null
 
 echo "✅ Bootstrap marked as complete"

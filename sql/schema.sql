@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS assets (
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
-CREATE INDEX idx_assets_mac ON assets(mac);
+CREATE INDEX IF NOT EXISTS idx_assets_mac ON assets(mac);
 
 -- Multiple IPv4/IPv6
 CREATE TABLE IF NOT EXISTS asset_ips (
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS asset_ips (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
-CREATE INDEX idx_asset_ips_ip ON asset_ips(ip);
+CREATE INDEX IF NOT EXISTS idx_asset_ips_ip ON asset_ips(ip);
 
 -- Nested/complex attributes as JSON
 CREATE TABLE IF NOT EXISTS asset_attributes (
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS changes (
   changed_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
-CREATE INDEX idx_changes_asset ON changes(asset_id, changed_at);
+CREATE INDEX IF NOT EXISTS idx_changes_asset ON changes(asset_id, changed_at);
 
 -- Agents (push model)
 CREATE TABLE IF NOT EXISTS agents (

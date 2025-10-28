@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS patches (
 ) ENGINE=InnoDB;
 
 -- Index for quick lookups
-CREATE INDEX idx_patches_name ON patches(patch_name);
-CREATE INDEX idx_patches_applied ON patches(applied_at);
+CREATE INDEX IF NOT EXISTS idx_patches_name ON patches(patch_name);
+CREATE INDEX IF NOT EXISTS idx_patches_applied ON patches(applied_at);
