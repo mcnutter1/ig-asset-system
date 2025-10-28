@@ -15,26 +15,42 @@ const detail = el('#asset-detail');
 
 // Check system status on page load
 const checkSystemStatus = () => {
+  console.log('Checking system status...');
   api('system_status').then((status) => {
     console.log('Bootstrap status:', status); // Debug log
+    
+    const bootstrapWarning = el('#bootstrap-warning');
+    const loginPanel = el('#login-panel');
+    
+    console.log('Bootstrap warning element:', bootstrapWarning);
+    console.log('Login panel element:', loginPanel);
+    
     if (!status.bootstrapped) {
+      console.log('System NOT bootstrapped - showing warning');
       // System not bootstrapped - show warning
-      el('#bootstrap-warning').classList.remove('hidden');
-      el('#login-panel').classList.add('hidden');
-      el('#main').classList.add('hidden');
-      el('#settings').classList.add('hidden');
+      if (bootstrapWarning) bootstrapWarning.classList.remove('hidden');
+      if (loginPanel) loginPanel.classList.add('hidden');
+      el('#main')?.classList.add('hidden');
+      el('#settings')?.classList.add('hidden');
     } else {
+      console.log('System IS bootstrapped - hiding warning, showing login');
       // System is bootstrapped - hide warning and show login
-      el('#bootstrap-warning').classList.add('hidden');
-      el('#login-panel').classList.remove('hidden');
+      if (bootstrapWarning) {
+        bootstrapWarning.classList.add('hidden');
+        console.log('Bootstrap warning hidden');
+      }
+      if (loginPanel) {
+        loginPanel.classList.remove('hidden');
+        console.log('Login panel shown');
+      }
     }
   }).catch((error) => {
     console.error('API error:', error); // Debug log
     // If API fails completely, show bootstrap warning
-    el('#bootstrap-warning').classList.remove('hidden');
-    el('#login-panel').classList.add('hidden');
-    el('#main').classList.add('hidden');
-    el('#settings').classList.add('hidden');
+    el('#bootstrap-warning')?.classList.remove('hidden');
+    el('#login-panel')?.classList.add('hidden');
+    el('#main')?.classList.add('hidden');
+    el('#settings')?.classList.add('hidden');
   });
 };
 
