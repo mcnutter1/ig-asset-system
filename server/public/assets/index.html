@@ -101,20 +101,70 @@
           </header>
           <form id="asset-form">
             <input type="hidden" id="asset-id">
-            <input type="text" id="asset-name" placeholder="Asset Name" required>
-            <select id="asset-type">
-              <option value="">Select Type...</option>
-              <option value="workstation">Workstation</option>
-              <option value="server">Server</option>
-              <option value="iot">IoT Device</option>
-              <option value="network">Network Equipment</option>
-              <option value="mobile">Mobile Device</option>
-              <option value="unknown">Unknown</option>
-            </select>
-            <input type="text" id="asset-mac" placeholder="MAC Address (00:11:22:33:44:55)">
-            <input type="text" id="asset-ips" placeholder="IP Addresses (comma-separated)">
-            <input type="number" id="asset-owner" placeholder="Owner User ID">
-            <textarea id="asset-attributes" placeholder='Attributes (JSON)' rows="4"></textarea>
+            
+            <label>Asset Name
+              <input type="text" id="asset-name" placeholder="Asset Name" required>
+            </label>
+            
+            <label>Type
+              <select id="asset-type">
+                <option value="">Select Type...</option>
+                <option value="workstation">Workstation</option>
+                <option value="server">Server</option>
+                <option value="iot">IoT Device</option>
+                <option value="network">Network Equipment</option>
+                <option value="mobile">Mobile Device</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            
+            <label>MAC Address
+              <input type="text" id="asset-mac" placeholder="00:11:22:33:44:55">
+            </label>
+            
+            <label>IP Addresses (comma-separated)
+              <input type="text" id="asset-ips" placeholder="192.168.1.10, 10.0.0.5">
+            </label>
+            
+            <label>Owner User ID
+              <input type="number" id="asset-owner" placeholder="Owner User ID">
+            </label>
+            
+            <hr>
+            <h4>Polling Configuration</h4>
+            
+            <label>
+              <input type="checkbox" id="asset-poll-enabled">
+              Enable Polling
+            </label>
+            
+            <label>Poll Type
+              <select id="asset-poll-type">
+                <option value="ping">Ping (Online Check Only)</option>
+                <option value="ssh">SSH (Linux/Unix)</option>
+                <option value="wmi">WMI (Windows)</option>
+                <option value="snmp">SNMP</option>
+              </select>
+            </label>
+            
+            <label>Poll Username (for SSH/WMI)
+              <input type="text" id="asset-poll-username" placeholder="admin">
+            </label>
+            
+            <label>Poll Password (for SSH/WMI)
+              <input type="password" id="asset-poll-password" placeholder="Password">
+            </label>
+            
+            <label>Poll Port (optional)
+              <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
+            </label>
+            
+            <hr>
+            
+            <label>Attributes (JSON)
+              <textarea id="asset-attributes" placeholder='{"os": {"family": "linux"}}' rows="4"></textarea>
+            </label>
+            
             <div style="display: flex; gap: 10px;">
               <button type="submit">Save Asset</button>
               <button type="button" class="secondary modal-cancel">Cancel</button>

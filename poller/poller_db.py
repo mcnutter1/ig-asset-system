@@ -113,34 +113,53 @@ class DatabasePoller:
             return False
     
     def get_targets(self):
-        """Get polling targets from database"""
+        """Get polling targets from assets table"""
         try:
             conn = self.get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE category = 'poller' AND name = 'targets'")
-            result = cursor.fetchone()
+            cursor = conn.cursor(dictionary=True)
+            
+            # Query assets that have polling enabled
+            cursor.execute("""
+                SELECT 
+                    a.id, a.name, a.type, a.mac,
+                    a.poll_type, a.poll_username, a.poll_password, a.poll_port,
+                    GROUP_CONCAT(ai.ip SEPARATOR ',') as ips
+                FROM assets a
+                LEFT JOIN asset_ips ai ON a.id = ai.asset_id
+                WHERE a.poll_enabled = TRUE
+                GROUP BY a.id, a.name, a.type, a.mac, a.poll_type, a.poll_username, a.poll_password, a.poll_port
+            """)
+            
+            assets = cursor.fetchall()
             conn.close()
             
-            if result and result[0]:
-                targets_data = json.loads(result[0])
-                # Ensure each target has required fields
-                targets = []
-                for target in targets_data:
-                    if isinstance(target, str):
-                        # Simple IP string - convert to object
-                        targets.append({
-                            'host': target,
-                            'type': 'linux',
-                            'username': 'admin',
-                            'password': ''
-                        })
-                    elif isinstance(target, dict) and 'host' in target:
-                        # Already an object
-                        targets.append(target)
-                return targets
-            return []
+            # Convert to target format
+            targets = []
+            for asset in assets:
+                # Get primary IP (first one in the list)
+                ips = asset['ips'].split(',') if asset['ips'] else []
+                primary_ip = ips[0] if ips else None
+                
+                if not primary_ip:
+                    self.log_to_db('warning', f"Asset {asset['name']} has polling enabled but no IP address", asset['name'])
+                    continue
+                
+                target = {
+                    'asset_id': asset['id'],
+                    'name': asset['name'],
+                    'host': primary_ip,
+                    'type': asset['poll_type'] or 'ping',
+                    'username': asset['poll_username'] or '',
+                    'password': asset['poll_password'] or '',
+                    'port': asset['poll_port'],
+                    'device_type': asset['type']
+                }
+                targets.append(target)
+            
+            return targets
+            
         except Exception as e:
-            self.log_to_db('error', f"Error getting targets: {e}")
+            self.log_to_db('error', f"Error getting targets from assets table: {e}")
             return []
     
     def log_to_db(self, level, message, target=None):
@@ -267,33 +286,44 @@ class DatabasePoller:
         targets = self.get_targets()
         
         if not targets:
-            self.log_to_db('warning', "No targets configured")
+            self.log_to_db('warning', "No assets enabled for polling")
             return
         
-        self.log_to_db('info', f"Starting poll cycle for {len(targets)} targets")
+        self.log_to_db('info', f"Starting poll cycle for {len(targets)} assets")
         
         for target in targets:
-            target_type = target.get('type', 'linux')
+            poll_type = target.get('type', 'ping')
             host = target['host']
+            asset_name = target.get('name', host)
             
-            # Probe the target
-            if target_type == 'linux':
+            # Probe based on poll type
+            if poll_type == 'ssh':
                 asset = self.linux_probe(target)
-            elif target_type == 'windows':
+            elif poll_type == 'wmi':
                 asset = self.windows_probe(target)
+            elif poll_type in ['snmp', 'ping']:
+                # Just check online status for now
+                asset = {
+                    "id": target.get('asset_id'),
+                    "name": asset_name,
+                    "type": target.get('device_type', 'unknown'),
+                    "ips": [{"ip": host}],
+                    "mac": None,
+                    "attributes": {}
+                }
             else:
-                self.log_to_db('error', f"Unknown target type: {target_type}", host)
+                self.log_to_db('error', f"Unknown poll type: {poll_type}", host)
                 continue
             
             # Check if host is online
             online = self.ping(host)
             status_msg = "online" if online else "offline"
-            self.log_to_db('info', f"Host {host} is {status_msg}", host)
+            self.log_to_db('info', f"Asset {asset_name} ({host}) is {status_msg}", host)
             
             # Push update to API
             self.push_update(asset, online)
         
-        self.log_to_db('info', f"Poll cycle completed for {len(targets)} targets")
+        self.log_to_db('info', f"Poll cycle completed for {len(targets)} assets")
     
     def reload_config(self):
         """Reload configuration from database"""

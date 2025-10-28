@@ -35,19 +35,24 @@ class AssetController {
   public static function create($data, $actor='manual') {
     $pdo = DB::conn();
     $id = uuid_v4();
-    $stmt = $pdo->prepare("INSERT INTO assets (id,name,type,mac,owner_user_id,source) VALUES (?,?,?,?,?,?)");
+    $stmt = $pdo->prepare("INSERT INTO assets (id,name,type,mac,owner_user_id,source,poll_enabled,poll_type,poll_username,poll_password,poll_port) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
       $id,
       $data['name'] ?? 'Unnamed',
       $data['type'] ?? 'unknown',
       $data['mac'] ?? null,
       $data['owner_user_id'] ?? null,
-      $actor === 'manual' ? 'manual' : $actor
+      $actor === 'manual' ? 'manual' : $actor,
+      $data['poll_enabled'] ?? false,
+      $data['poll_type'] ?? 'ping',
+      $data['poll_username'] ?? null,
+      $data['poll_password'] ?? null,
+      $data['poll_port'] ?? null
     ]);
     if (!empty($data['ips'])) self::set_ips($id, $data['ips'], $actor);
     if (!empty($data['attributes'])) self::set_attributes($id, $data['attributes'], $actor);
     change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, 'asset', null, ['created'=>true]);
-    echo json_encode(['id'=>$id]);
+    echo json_encode(['success'=>true, 'id'=>$id]);
   }
 
   public static function update($id, $data, $actor='manual') {
@@ -57,7 +62,7 @@ class AssetController {
     $old = $stmt->fetch();
     if (!$old) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
 
-    $fields = ['name','type','mac','owner_user_id','online_status','last_seen'];
+    $fields = ['name','type','mac','owner_user_id','online_status','last_seen','poll_enabled','poll_type','poll_username','poll_password','poll_port'];
     $sets = []; $vals = [];
     foreach ($fields as $f) {
       if (array_key_exists($f, $data)) {
@@ -76,7 +81,7 @@ class AssetController {
     }
     if (isset($data['ips'])) self::set_ips($id, $data['ips'], $actor);
     if (isset($data['attributes'])) self::set_attributes($id, $data['attributes'], $actor);
-    echo json_encode(['ok'=>true]);
+    echo json_encode(['success'=>true]);
   }
 
   public static function delete($id) {

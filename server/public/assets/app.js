@@ -368,6 +368,14 @@ const editAsset = (id) => {
     el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
     el('#asset-owner').value = a.owner_id || '';
     el('#asset-attributes').value = JSON.stringify(a.attributes, null, 2);
+    
+    // Polling fields
+    el('#asset-poll-enabled').checked = a.poll_enabled || false;
+    el('#asset-poll-type').value = a.poll_type || 'ping';
+    el('#asset-poll-username').value = a.poll_username || '';
+    el('#asset-poll-password').value = a.poll_password || '';
+    el('#asset-poll-port').value = a.poll_port || '';
+    
     el('#modal-title').textContent = 'Edit Asset';
     el('#asset-modal').showModal();
   });
@@ -399,6 +407,11 @@ const setupAllHandlers = () => {
     el('#asset-ips').value = '';
     el('#asset-owner').value = '';
     el('#asset-attributes').value = '';
+    el('#asset-poll-enabled').checked = false;
+    el('#asset-poll-type').value = 'ping';
+    el('#asset-poll-username').value = '';
+    el('#asset-poll-password').value = '';
+    el('#asset-poll-port').value = '';
     el('#modal-title').textContent = 'Add Asset';
     el('#asset-modal').showModal();
   };
@@ -410,18 +423,23 @@ const setupAllHandlers = () => {
       name: el('#asset-name').value,
       type: el('#asset-type').value,
       mac: el('#asset-mac').value || null,
-      ips: el('#asset-ips').value.split(',').map(ip => ({ ip: ip.trim() })),
+      ips: el('#asset-ips').value.split(',').map(ip => ({ ip: ip.trim() })).filter(x => x.ip),
       owner_id: el('#asset-owner').value || null,
-      attributes: el('#asset-attributes').value ? JSON.parse(el('#asset-attributes').value) : {}
+      attributes: el('#asset-attributes').value ? JSON.parse(el('#asset-attributes').value) : {},
+      poll_enabled: el('#asset-poll-enabled').checked,
+      poll_type: el('#asset-poll-type').value,
+      poll_username: el('#asset-poll-username').value || null,
+      poll_password: el('#asset-poll-password').value || null,
+      poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
     };
     const method = id ? 'PUT' : 'POST';
-    const action = id ? `assets/${id}` : 'assets';
-    api(action, method, data).then(r => {
-      if (r.success) {
+    const action = id ? 'asset_update' : 'asset_create';
+    api(action, method, {id, ...data}).then(r => {
+      if (r.success || r.ok) {
         el('#asset-modal').close();
         loadAssets();
       } else {
-        alert('Error: ' + r.message);
+        alert('Error: ' + (r.message || r.error));
       }
     });
   };
