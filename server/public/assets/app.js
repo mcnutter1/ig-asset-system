@@ -35,7 +35,9 @@ const checkSystemStatus = () => {
 
 // ============= AUTHENTICATION =============
 const setupAuthHandlers = () => {
-  el('#login-btn').onclick = () => {
+  el('#login-btn').onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     const username = el('#username').value;
     const password = el('#password').value;
 
