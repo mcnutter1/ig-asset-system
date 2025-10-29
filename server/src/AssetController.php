@@ -32,6 +32,21 @@ class AssetController {
     echo json_encode($asset);
   }
 
+  public static function getByIp($ip) {
+    $pdo = DB::conn();
+    // Find asset_id from asset_ips table
+    $stmt = $pdo->prepare("SELECT asset_id FROM asset_ips WHERE ip=? LIMIT 1");
+    $stmt->execute([$ip]);
+    $row = $stmt->fetch();
+    if (!$row) { 
+      http_response_code(404); 
+      echo json_encode(['error'=>'not_found', 'message'=>'No asset found with IP: '.$ip]); 
+      return; 
+    }
+    // Use existing get() method to return full asset details
+    self::get($row['asset_id']);
+  }
+
   public static function create($data, $actor='manual') {
     $pdo = DB::conn();
     $id = uuid_v4();

@@ -51,8 +51,13 @@ switch ($action) {
     break;
 
   case 'asset_get':
-    require_login();
+    require_login(); require_role('user');
     AssetController::get($_GET['id'] ?? '');
+    break;
+
+  case 'asset_get_by_ip':
+    require_login(); require_role('user');
+    AssetController::getByIp($_GET['ip'] ?? '');
     break;
 
   case 'asset_create':
