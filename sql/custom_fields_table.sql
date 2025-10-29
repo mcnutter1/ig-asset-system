@@ -14,12 +14,12 @@ CREATE TABLE IF NOT EXISTS custom_fields (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_display_order (display_order),
   INDEX idx_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Custom field values table (stores actual values for each asset)
 CREATE TABLE IF NOT EXISTS custom_field_values (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  asset_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  asset_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   field_id BIGINT NOT NULL,
   value TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
   INDEX idx_field_id (field_id),
   CONSTRAINT fk_custom_field_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
   CONSTRAINT fk_custom_field_field FOREIGN KEY (field_id) REFERENCES custom_fields(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Sample custom fields (only insert if they don't exist)
 INSERT IGNORE INTO custom_fields (name, label, field_type, is_required, applies_to_types, display_order, help_text) VALUES
