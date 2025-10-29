@@ -39,6 +39,246 @@ const api = (action, method = 'GET', body = null, timeout = 30000) => {
 const el = sel => document.querySelector(sel);
 const elAll = sel => document.querySelectorAll(sel);
 
+const escapeHtml = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString();
+  } catch (err) {
+    return value;
+  }
+};
+
+const getStatusColor = (status) => {
+  if (status === 'online') return '#2ba471';
+  if (status === 'offline') return '#d64545';
+  return '#64748b';
+};
+
+const defaultAssetColumns = ['name','type','ips','mac','owner','status','last_seen'];
+const allAssetColumnKeys = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
+const assetColumnOrder = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
+
+const assetColumnDefinitions = {
+  name: {
+    label: 'Name',
+    render: asset => `<strong>${escapeHtml(asset?.name || '-')}</strong>`
+  },
+  type: {
+    label: 'Type',
+    render: asset => escapeHtml(asset?.type || '-')
+  },
+  ips: {
+    label: 'IP Addresses',
+    render: asset => {
+      const ips = Array.isArray(asset?.ips) ? asset.ips.map(x => escapeHtml(x.ip)).filter(Boolean).join(', ') : '';
+      return `<span class="monospace">${ips || '-'}</span>`;
+    }
+  },
+  mac: {
+    label: 'MAC Address',
+    render: asset => `<span class="monospace">${escapeHtml(asset?.mac || '-')}</span>`
+  },
+  owner: {
+    label: 'Owner',
+    render: asset => escapeHtml(getOwnerDisplayName(asset) || '-')
+  },
+  status: {
+    label: 'Status',
+    render: asset => {
+      const status = asset?.online_status || 'unknown';
+      const color = getStatusColor(status);
+      return `<span style="color: ${color};">● ${escapeHtml(status)}</span>`;
+    }
+  },
+  last_seen: {
+    label: 'Last Seen',
+    render: asset => escapeHtml(formatDateTime(asset?.updated_at))
+  },
+  source: {
+    label: 'Source',
+    render: asset => escapeHtml(asset?.source || '-')
+  },
+  created_at: {
+    label: 'Created',
+    render: asset => escapeHtml(formatDateTime(asset?.created_at))
+  },
+  updated_at: {
+    label: 'Updated',
+    render: asset => escapeHtml(formatDateTime(asset?.updated_at))
+  }
+};
+
+let activeAssetColumns = [...defaultAssetColumns];
+let columnPrefsLoaded = false;
+let lastRenderedAssets = [];
+let lastAssetRenderContext = { emptyReason: 'none', total: 0 };
+
+function sanitizeColumns(columns) {
+  if (!Array.isArray(columns)) {
+    return [...defaultAssetColumns];
+  }
+  const unique = [];
+  columns.forEach(col => {
+    if (allAssetColumnKeys.includes(col) && !unique.includes(col)) {
+      unique.push(col);
+    }
+  });
+  return unique.length ? unique : [...defaultAssetColumns];
+}
+
+function renderAssetActionButtons(asset = {}) {
+  const id = asset.id || '';
+  const safeId = id.replace(/'/g, "\\'");
+  return `
+    <div class="action-buttons">
+      <button type="button" class="icon-btn" onclick="viewAsset('${safeId}')" title="View asset" aria-label="View asset">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-4.97 0-9.16 3.11-11 7 1.84 3.89 6.03 7 11 7s9.16-3.11 11-7c-1.84-3.89-6.03-7-11-7zm0 11a4 4 0 110-8 4 4 0 010 8zm0-2.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="icon-btn" onclick="editAsset('${safeId}')" title="Edit asset" aria-label="Edit asset">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/><path d="M20.71 7.04a1.003 1.003 0 000-1.42L18.37 3.29a1.003 1.003 0 00-1.42 0L15.12 5.12l3.75 3.75 1.84-1.83z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="icon-btn danger" onclick="deleteAsset('${safeId}')" title="Delete asset" aria-label="Delete asset">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+function renderAssetTable(assets) {
+  const headRow = el('#asset-table-head');
+  const body = el('#asset-list');
+  if (!headRow || !body) return;
+
+  const headerHtml = activeAssetColumns
+    .map(column => {
+      const def = assetColumnDefinitions[column];
+      const label = def ? def.label : column;
+      return `<th data-column="${column}">${escapeHtml(label)}</th>`;
+    })
+    .join('') + '<th>Actions</th>';
+
+  headRow.innerHTML = headerHtml;
+
+  if (!Array.isArray(assets) || assets.length === 0) {
+    const colspan = activeAssetColumns.length + 1;
+    let message = 'No assets found';
+    if (lastAssetRenderContext.emptyReason === 'filter') {
+      message = 'No assets found for selected owner';
+    } else if (lastAssetRenderContext.emptyReason === 'error') {
+      message = 'Failed to load assets';
+    }
+    body.innerHTML = `<tr><td colspan="${colspan}" class="empty-state">${escapeHtml(message)}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = assets.map(asset => {
+    const cells = activeAssetColumns.map(column => {
+      const def = assetColumnDefinitions[column];
+      const value = def ? def.render(asset) : '';
+      return `<td data-column="${column}">${value}</td>`;
+    }).join('');
+    return `<tr data-asset-id="${escapeHtml(asset.id || '')}">${cells}<td class="actions-cell">${renderAssetActionButtons(asset)}</td></tr>`;
+  }).join('');
+}
+
+function syncColumnModalSelections() {
+  const container = el('#column-options');
+  if (!container) return;
+  const checkboxes = container.querySelectorAll('input[name="columns"]');
+  checkboxes.forEach(input => {
+    input.checked = activeAssetColumns.includes(input.value);
+  });
+}
+
+function setActiveColumns(columns) {
+  const sanitized = sanitizeColumns(columns);
+  if (sanitized.join('|') === activeAssetColumns.join('|')) {
+    syncColumnModalSelections();
+    return;
+  }
+  activeAssetColumns = sanitized;
+  renderAssetTable(lastRenderedAssets);
+  syncColumnModalSelections();
+}
+
+function buildColumnOptions() {
+  const container = el('#column-options');
+  if (!container) return;
+  const optionsHtml = assetColumnOrder
+    .filter(column => assetColumnDefinitions[column])
+    .map(column => {
+      const def = assetColumnDefinitions[column];
+      return `
+        <label>
+          <input type="checkbox" name="columns" value="${column}">
+          ${escapeHtml(def.label)}
+        </label>
+      `;
+    }).join('');
+  container.innerHTML = optionsHtml;
+  syncColumnModalSelections();
+}
+
+function showColumnError(message) {
+  const errorEl = el('#column-error');
+  if (!errorEl) return;
+  errorEl.textContent = message;
+  errorEl.classList.remove('hidden');
+}
+
+function hideColumnError() {
+  const errorEl = el('#column-error');
+  if (!errorEl) return;
+  errorEl.textContent = '';
+  errorEl.classList.add('hidden');
+}
+
+function persistColumnPreferences(columns) {
+  if (!currentUser) return Promise.resolve();
+  const sanitized = sanitizeColumns(columns);
+  return api('asset_columns_save', 'POST', { columns: sanitized }).catch(err => {
+    console.error('Failed to save column preferences:', err);
+  });
+}
+
+function loadColumnPreferences() {
+  if (!currentUser) {
+    setActiveColumns(defaultAssetColumns);
+    columnPrefsLoaded = false;
+    return Promise.resolve();
+  }
+  if (columnPrefsLoaded) {
+    return Promise.resolve();
+  }
+  return api('asset_columns_get').then(res => {
+    const columns = Array.isArray(res?.columns) ? res.columns : defaultAssetColumns;
+    setActiveColumns(columns);
+    columnPrefsLoaded = true;
+  }).catch(err => {
+    console.error('Failed to load column preferences:', err);
+    columnPrefsLoaded = true;
+    setActiveColumns(defaultAssetColumns);
+  });
+}
+
+function openColumnModal() {
+  const modal = el('#column-modal');
+  if (!modal) return;
+  buildColumnOptions();
+  hideColumnError();
+  modal.showModal();
+}
+
 // ============= USER MANAGEMENT =============
 let usersCache = [];
 let currentOwnerFilter = '';
@@ -80,7 +320,7 @@ const populateOwnerDropdowns = () => {
   }
 };
 
-const getOwnerDisplayName = (asset) => {
+function getOwnerDisplayName(asset) {
   // Prefer API-provided owner_name/owner_email if available
   if (asset && asset.owner_name) {
     const emailPart = asset.owner_email ? ` (${asset.owner_email})` : '';
@@ -93,7 +333,7 @@ const getOwnerDisplayName = (asset) => {
   if (!user) return `User #${asset.owner_user_id}`;
   const emailPart = user.email ? ` (${user.email})` : '';
   return (user.display_name || user.username) + emailPart;
-};
+}
 
 // ============= SYSTEM STATUS =============
 const checkSystemStatus = () => {
@@ -142,9 +382,13 @@ const setActiveUser = (user, { initialLoad = false } = {}) => {
       pollingStatusTimer = setInterval(updatePollingStatus, 30000);
     }
     if (initialLoad) {
-      loadUsers();
-      loadAssets();
-      updatePollingStatus();
+      loadColumnPreferences().finally(() => {
+        loadUsers();
+        loadAssets();
+        updatePollingStatus();
+      });
+    } else {
+      loadColumnPreferences();
     }
   } else {
     mainPanel?.classList.add('hidden');
@@ -154,6 +398,11 @@ const setActiveUser = (user, { initialLoad = false } = {}) => {
     currentOwnerFilter = '';
     usersCache = [];
     populateOwnerDropdowns();
+    columnPrefsLoaded = false;
+    activeAssetColumns = [...defaultAssetColumns];
+    lastRenderedAssets = [];
+    lastAssetRenderContext = { emptyReason: 'none', total: 0 };
+    renderAssetTable([]);
     if (pollingStatusTimer) {
       clearInterval(pollingStatusTimer);
       pollingStatusTimer = null;
@@ -304,11 +553,17 @@ const setupSettingsListeners = () => {
   };
 
   el('#start-polling-settings').onclick = () => {
-    api('poller_start', 'POST').then(() => updatePollingStatusInSettings());
+    api('poller_start', 'POST').then(() => {
+      updatePollingStatusInSettings();
+      updatePollingStatus();
+    });
   };
 
   el('#stop-polling-settings').onclick = () => {
-    api('poller_stop', 'POST').then(() => updatePollingStatusInSettings());
+    api('poller_stop', 'POST').then(() => {
+      updatePollingStatusInSettings();
+      updatePollingStatus();
+    });
   };
 
   // Polling Log Viewer - Simple load on demand
@@ -567,17 +822,13 @@ const updatePollingStatus = () => {
   if (!currentUser) return;
   api('poller_status').then(status => {
     const statusEl = el('#polling-status');
-    const startBtn = el('#start-polling');
-    const stopBtn = el('#stop-polling');
     const text = status.status === 'running' 
       ? `Polling: Running (${status.targets_count} targets)`
       : `Polling: Stopped (${status.targets_count} targets)`;
     if (statusEl) {
       statusEl.textContent = text;
-  statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
+      statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
     }
-    if (startBtn) startBtn.disabled = status.status === 'running';
-    if (stopBtn) stopBtn.disabled = status.status !== 'running';
   }).catch(err => {
     console.error('Failed to update polling status:', err);
     const statusEl = el('#polling-status');
@@ -599,19 +850,11 @@ const updatePollingStatusInSettings = () => {
       : `Stopped (${status.targets_count} targets)`;
     if (statusEl) {
       statusEl.textContent = text;
-  statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
+      statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
     }
     if (startBtn) startBtn.disabled = status.status === 'running';
     if (stopBtn) stopBtn.disabled = status.status !== 'running';
   });
-};
-
-el('#start-polling').onclick = () => {
-  api('poller_start', 'POST').then(() => updatePollingStatus());
-};
-
-el('#stop-polling').onclick = () => {
-  api('poller_stop', 'POST').then(() => updatePollingStatus());
 };
 
 // ============= SYSTEM HEALTH =============
@@ -632,46 +875,26 @@ const checkSystemHealth = () => {
 // ============= ASSET MANAGEMENT =============
 const loadAssets = () => {
   api('assets').then(assets => {
-    const tbody = el('#asset-list');
-    if (!Array.isArray(assets) || assets.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888;">No assets found</td></tr>';
-      return;
-    }
-    
-    // Filter assets by owner if filter is set
-  let filteredAssets = assets;
+    const total = Array.isArray(assets) ? assets.length : 0;
+    let filteredAssets = Array.isArray(assets) ? assets : [];
+
     if (currentOwnerFilter) {
-      filteredAssets = assets.filter(a => a.owner_user_id == currentOwnerFilter);
+      filteredAssets = filteredAssets.filter(a => a.owner_user_id == currentOwnerFilter);
     }
-    
-    if (filteredAssets.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888;">No assets found for selected owner</td></tr>';
-      return;
+
+    let emptyReason = 'none';
+    if (!filteredAssets.length) {
+      emptyReason = total > 0 ? 'filter' : 'none';
     }
-    
-    tbody.innerHTML = filteredAssets.map(a => {
-      const ips = (a.ips || []).map(x => x.ip).join(', ') || '-';
-  const statusColor = a.online_status === 'online' ? '#2ba471' : '#d64545';
-      const lastSeen = a.updated_at ? new Date(a.updated_at).toLocaleString() : '-';
-      const ownerName = getOwnerDisplayName(a);
-      
-      return `
-        <tr>
-          <td><strong>${a.name}</strong></td>
-          <td>${a.type}</td>
-          <td style="font-family: monospace; font-size: 0.9em;">${ips}</td>
-          <td style="font-family: monospace; font-size: 0.9em;">${a.mac || '-'}</td>
-          <td>${ownerName}</td>
-          <td><span style="color: ${statusColor};">● ${a.online_status}</span></td>
-          <td style="font-size: 0.85em; color: #888;">${lastSeen}</td>
-          <td style="white-space: nowrap;">
-            <button onclick="viewAsset('${a.id}')" class="secondary" style="padding: 4px 12px; margin-right: 5px;">View</button>
-            <button onclick="editAsset('${a.id}')" class="secondary" style="padding: 4px 12px; margin-right: 5px;">Edit</button>
-            <button onclick="deleteAsset('${a.id}')" class="contrast" style="padding: 4px 12px;">Delete</button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+
+    lastRenderedAssets = filteredAssets;
+    lastAssetRenderContext = { emptyReason, total };
+    renderAssetTable(filteredAssets);
+  }).catch(err => {
+    console.error('Failed to load assets:', err);
+    lastRenderedAssets = [];
+    lastAssetRenderContext = { emptyReason: 'error', total: 0 };
+    renderAssetTable([]);
   });
 };
 
@@ -895,6 +1118,43 @@ const setupAllHandlers = () => {
   // Asset management handlers
   el('#refresh').onclick = loadAssets;
 
+  // Column preferences modal
+  const columnBtn = el('#column-config');
+  if (columnBtn) {
+    columnBtn.onclick = () => openColumnModal();
+  }
+
+  const columnForm = el('#column-form');
+  if (columnForm) {
+    columnForm.onsubmit = (e) => {
+      e.preventDefault();
+      const selected = Array.from(columnForm.querySelectorAll('input[name="columns"]:checked')).map(input => input.value);
+      if (!selected.length) {
+        showColumnError('Select at least one column to display.');
+        return;
+      }
+      hideColumnError();
+      setActiveColumns(selected);
+      persistColumnPreferences(selected);
+      el('#column-modal')?.close();
+    };
+  }
+
+  const resetColumnsBtn = el('#reset-columns');
+  if (resetColumnsBtn) {
+    resetColumnsBtn.onclick = () => {
+      hideColumnError();
+      setActiveColumns(defaultAssetColumns);
+      persistColumnPreferences(defaultAssetColumns);
+      el('#column-modal')?.close();
+    };
+  }
+
+  const columnModal = el('#column-modal');
+  if (columnModal) {
+    columnModal.addEventListener('close', () => hideColumnError());
+  }
+
   el('#new-asset').onclick = () => {
     el('#asset-id').value = '';
     el('#asset-name').value = '';
@@ -1037,14 +1297,6 @@ const setupAllHandlers = () => {
     el('#drawer').classList.add('hidden');
   };
 
-  // Polling handlers
-  el('#start-polling').onclick = () => {
-    api('poller_start', 'POST').then(() => updatePollingStatus());
-  };
-
-  el('#stop-polling').onclick = () => {
-    api('poller_stop', 'POST').then(() => updatePollingStatus());
-  };
 };
 
 document.addEventListener('app:unauthorized', () => {

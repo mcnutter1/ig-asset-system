@@ -37,17 +37,30 @@ class AgentController {
     $actor = 'agent';
     $asset_id = $asset['id'] ?? null;
 
+    $updateData = [
+      'last_seen' => date('Y-m-d H:i:s'),
+      'online_status' => ($payload['online_status'] ?? true) ? 'online' : 'offline'
+    ];
+
+    if (!empty($asset['mac'])) {
+      $updateData['mac'] = $asset['mac'];
+    }
+
+    if (isset($asset['ips'])) {
+      $ips = is_array($asset['ips']) ? array_values(array_filter($asset['ips'])) : [];
+      if (!empty($ips)) {
+        $updateData['ips'] = $ips;
+      }
+    }
+
+    if (isset($asset['attributes']) && (is_array($asset['attributes']) || is_object($asset['attributes']))) {
+      if (!empty((array)$asset['attributes'])) {
+        $updateData['attributes'] = $asset['attributes'];
+      }
+    }
+
     if ($asset_id) {
-      AssetController::update($asset_id, [
-        'name' => $asset['name'] ?? null,
-        'mac'  => $asset['mac'] ?? null,
-        'type' => $asset['type'] ?? null,
-        'owner_user_id' => $asset['owner_user_id'] ?? null,
-        'last_seen' => date('Y-m-d H:i:s'),
-        'online_status' => ($payload['online_status'] ?? true) ? 'online' : 'offline',
-        'ips' => $asset['ips'] ?? null,
-        'attributes' => $asset['attributes'] ?? null
-      ], $actor);
+      AssetController::update($asset_id, $updateData, $actor);
       echo json_encode(['ok'=>true]);
       return;
     } else {
@@ -76,16 +89,7 @@ class AgentController {
         ], $actor);
         return;
       } else {
-        AssetController::update($asset_id, [
-          'name' => $asset['name'] ?? null,
-          'mac'  => $asset['mac'] ?? null,
-          'type' => $asset['type'] ?? null,
-          'owner_user_id' => $asset['owner_user_id'] ?? null,
-          'last_seen' => date('Y-m-d H:i:s'),
-          'online_status' => ($payload['online_status'] ?? true) ? 'online' : 'offline',
-          'ips' => $asset['ips'] ?? null,
-          'attributes' => $asset['attributes'] ?? null
-        ], $actor);
+        AssetController::update($asset_id, $updateData, $actor);
         echo json_encode(['ok'=>true]);
         return;
       }

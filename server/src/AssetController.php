@@ -24,15 +24,17 @@ class AssetController {
       ");
     }
     $rows = $stmt->fetchAll();
-    foreach ($rows as &$r) {
-      $r['ips'] = self::ips($r['id']);
-      $r['attributes'] = self::attributes($r['id']);
-      // Custom fields - will be enabled after tables are created
+    $count = count($rows);
+    for ($i = 0; $i < $count; $i++) {
+      $row = $rows[$i];
+      $row['ips'] = self::ips($row['id']);
+      $row['attributes'] = self::attributes($row['id']);
       try {
-        $r['custom_fields'] = self::customFields($r['id']);
+        $row['custom_fields'] = self::customFields($row['id']);
       } catch (Exception $e) {
-        $r['custom_fields'] = [];
+        $row['custom_fields'] = [];
       }
+      $rows[$i] = $row;
     }
     echo json_encode($rows);
   }

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../src/SettingsController.php';
 require_once __DIR__ . '/../src/SystemController.php';
 require_once __DIR__ . '/../src/PollerController.php';
 require_once __DIR__ . '/../src/CustomFieldsController.php';
+require_once __DIR__ . '/../src/PreferencesController.php';
 
 cors_headers();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
@@ -244,6 +245,41 @@ switch ($action) {
   case 'custom_fields_for_type':
     require_login(); require_role('user');
     CustomFieldsController::getFieldsForType($_GET['type'] ?? '');
+    break;
+
+  case 'asset_columns_get':
+    require_login();
+    $allowedColumns = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
+    $defaultColumns = ['name','type','ips','mac','owner','status','last_seen'];
+    $userId = intval($_SESSION['user']['id']);
+    $columns = PreferencesController::get($userId, 'asset_table_columns', $defaultColumns);
+    if (!is_array($columns)) {
+      $columns = $defaultColumns;
+    }
+    $columns = array_values(array_intersect(array_unique(array_map('strval', $columns)), $allowedColumns));
+    if (empty($columns)) {
+      $columns = $defaultColumns;
+    }
+    echo json_encode([
+      'columns' => $columns,
+      'default' => $defaultColumns,
+      'allowed' => $allowedColumns
+    ]);
+    break;
+
+  case 'asset_columns_save':
+    require_login();
+    $allowedColumns = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
+    $defaultColumns = ['name','type','ips','mac','owner','status','last_seen'];
+    $userId = intval($_SESSION['user']['id']);
+    $in = json_input();
+    $columns = isset($in['columns']) && is_array($in['columns']) ? $in['columns'] : [];
+    $columns = array_values(array_intersect(array_unique(array_map('strval', $columns)), $allowedColumns));
+    if (empty($columns)) {
+      $columns = $defaultColumns;
+    }
+    PreferencesController::set($userId, 'asset_table_columns', $columns);
+    echo json_encode(['success' => true, 'columns' => $columns]);
     break;
 
   default:

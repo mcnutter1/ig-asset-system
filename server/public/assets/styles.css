@@ -184,6 +184,10 @@ nav select {
   color: var(--text-primary);
 }
 
+#asset-table th:last-child {
+  text-align: right;
+}
+
 #asset-table tbody tr {
   border-bottom: 1px solid var(--border-color);
   transition: background 0.15s ease;
@@ -196,6 +200,58 @@ nav select {
 #asset-table td {
   padding: var(--spacing-sm) var(--spacing-md);
   vertical-align: middle;
+}
+
+#asset-table td.actions-cell {
+  text-align: right;
+}
+
+.action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monospace {
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-btn:hover {
+  background: rgba(53, 99, 233, 0.12);
+  border-color: rgba(53, 99, 233, 0.15);
+  color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+.icon-btn.danger:hover {
+  background: rgba(214, 69, 69, 0.12);
+  border-color: rgba(214, 69, 69, 0.2);
+  color: var(--accent-red);
+}
+
+.icon-btn:focus {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
 #asset-table button {
@@ -319,7 +375,9 @@ dialog article {
 }
 
 dialog header {
+  position: relative;
   padding: var(--spacing-lg);
+  padding-right: calc(var(--spacing-xl) + 20px);
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 0;
 }
@@ -329,10 +387,58 @@ dialog header h3 {
   font-size: 1.2rem;
 }
 
+dialog header .modal-close {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+dialog header .modal-close::before {
+  content: '×';
+  line-height: 1;
+}
+
+dialog header .modal-close:hover {
+  background: rgba(53, 99, 233, 0.12);
+  color: var(--accent-blue);
+  transform: rotate(90deg);
+}
+
+dialog header .modal-close:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 dialog form {
   padding: var(--spacing-lg);
   max-height: 70vh;
   overflow-y: auto;
+}
+
+dialog fieldset {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: var(--spacing-md);
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+dialog fieldset legend {
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+  padding: 0 var(--spacing-sm);
 }
 
 dialog footer {
@@ -470,6 +576,35 @@ details[open] summary {
   box-shadow: 0 4px 14px rgba(53, 99, 233, 0.25);
 }
 
+.column-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.column-options-grid label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border: 1px solid rgba(53, 99, 233, 0.15);
+  border-radius: 6px;
+  background: rgba(53, 99, 233, 0.05);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.column-options-grid label:hover {
+  background: rgba(53, 99, 233, 0.12);
+  border-color: rgba(53, 99, 233, 0.35);
+  transform: translateY(-1px);
+}
+
+.column-options-grid input[type="checkbox"] {
+  margin: 0;
+}
+
 .settings-panel {
   display: none;
 }
@@ -566,6 +701,12 @@ footer {
   flex-wrap: wrap;
 }
 
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--text-muted);
+}
+
 .alert {
   padding: var(--spacing-md);
   border-radius: 4px;
@@ -594,6 +735,20 @@ footer {
   background: rgba(74, 144, 226, 0.1);
   border: 1px solid rgba(74, 144, 226, 0.3);
   color: var(--accent-blue);
+}
+
+.form-error {
+  color: var(--accent-red);
+  font-size: 13px;
+  margin: -var(--spacing-sm) 0 var(--spacing-sm) 0;
+}
+
+.form-error.hidden {
+  display: none;
+}
+
+.flex-spacer {
+  flex: 1;
 }
 
 /* Bootstrap Warning */

@@ -63,10 +63,7 @@
         <ul>
           <li><button id="refresh">Refresh</button></li>
           <li><button id="new-asset">+ New Asset</button></li>
-          <li>
-            <button id="start-polling">▶ Start Polling</button>
-            <button id="stop-polling">⏸ Stop Polling</button>
-          </li>
+          <li><button id="column-config">Columns</button></li>
           <li><button id="settings-btn">⚙ Settings</button></li>
         </ul>
       </nav>
@@ -75,7 +72,7 @@
       <div style="overflow-x: auto;">
         <table id="asset-table">
           <thead>
-            <tr>
+            <tr id="asset-table-head">
               <th>Name</th>
               <th>Type</th>
               <th>IP Addresses</th>
@@ -103,7 +100,7 @@
         <article>
           <header>
             <h3 id="modal-title">Add Asset</h3>
-            <button aria-label="Close" class="modal-close"></button>
+            <button type="button" aria-label="Close" class="modal-close"></button>
           </header>
           <form id="asset-form">
             <input type="hidden" id="asset-id">
@@ -191,6 +188,7 @@
         <article>
           <header>
             <h3>Delete Asset</h3>
+            <button type="button" aria-label="Close" class="modal-close"></button>
           </header>
           <p>Are you sure you want to delete this asset?</p>
           <p><strong id="delete-asset-name"></strong></p>
@@ -199,6 +197,29 @@
             <button id="confirm-delete" class="contrast">Delete</button>
             <button type="button" class="secondary modal-cancel">Cancel</button>
           </div>
+        </article>
+      </dialog>
+
+      <!-- Column Preferences Modal -->
+      <dialog id="column-modal">
+        <article>
+          <header>
+            <h3>Customize Columns</h3>
+            <button type="button" aria-label="Close" class="modal-close"></button>
+          </header>
+          <form id="column-form">
+            <fieldset>
+              <legend>Select the columns you want to see</legend>
+              <div id="column-options" class="column-options-grid"></div>
+            </fieldset>
+            <p id="column-error" class="form-error hidden"></p>
+            <footer style="display: flex; align-items: center; gap: var(--spacing-sm);">
+              <button type="button" id="reset-columns" class="secondary">Reset to Default</button>
+              <span class="flex-spacer"></span>
+              <button type="button" class="secondary modal-cancel">Cancel</button>
+              <button type="submit">Save</button>
+            </footer>
+          </form>
         </article>
       </dialog>
 
@@ -372,7 +393,7 @@
       <article style="width: 600px;">
         <header>
           <h3 id="field-modal-title">Add Custom Field</h3>
-          <button aria-label="Close" rel="prev" onclick="document.getElementById('custom-field-modal').close()"></button>
+            <button type="button" aria-label="Close" class="modal-close"></button>
         </header>
         <form id="custom-field-form">
           <input type="hidden" id="field-id">

@@ -1,9 +1,14 @@
-# Poller targets (examples)
+# Poller targets (examples). You can also use a single `targets:` list with an `os` field.
 linux:
   - host: 192.168.1.10
     username: ubuntu
     password: changeme
     asset_id: null   # optional; if not set, upsert by MAC/name
+bsd:
+  - host: freebsd.local
+    username: root
+    password: changeme
+    asset_type: server
 windows:
   - host: winhost.local
     username: Administrator
