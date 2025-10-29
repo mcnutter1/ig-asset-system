@@ -27,7 +27,12 @@ class AssetController {
     foreach ($rows as &$r) {
       $r['ips'] = self::ips($r['id']);
       $r['attributes'] = self::attributes($r['id']);
-      $r['custom_fields'] = self::customFields($r['id']);
+      // Custom fields - will be enabled after tables are created
+      try {
+        $r['custom_fields'] = self::customFields($r['id']);
+      } catch (Exception $e) {
+        $r['custom_fields'] = [];
+      }
     }
     echo json_encode($rows);
   }
@@ -45,7 +50,12 @@ class AssetController {
     if (!$asset) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
     $asset['ips'] = self::ips($id);
     $asset['attributes'] = self::attributes($id);
-    $asset['custom_fields'] = self::customFields($id);
+    // Custom fields - will be enabled after tables are created
+    try {
+      $asset['custom_fields'] = self::customFields($id);
+    } catch (Exception $e) {
+      $asset['custom_fields'] = [];
+    }
     $asset['changes'] = self::changes($id);
     echo json_encode($asset);
   }
