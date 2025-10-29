@@ -1185,96 +1185,100 @@ const setupAllHandlers = () => {
     };
   }
 
-  el('#asset-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const id = el('#asset-id').value;
-    
-    // Validate JSON attributes
-    const attrsInput = el('#asset-attributes').value.trim();
-    let attributes = {};
-    if (attrsInput) {
-      try {
-        attributes = JSON.parse(attrsInput);
-        if (typeof attributes !== 'object' || Array.isArray(attributes)) {
-          alert('Attributes must be a valid JSON object (not an array)');
+  const assetForm = el('#asset-form');
+  if (assetForm) {
+    assetForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = el('#asset-id').value;
+
+      // Validate JSON attributes
+      const attrsInput = el('#asset-attributes').value.trim();
+      let attributes = {};
+      if (attrsInput) {
+        try {
+          attributes = JSON.parse(attrsInput);
+          if (typeof attributes !== 'object' || Array.isArray(attributes)) {
+            alert('Attributes must be a valid JSON object (not an array)');
+            return;
+          }
+        } catch (err) {
+          alert('Invalid JSON in attributes field:\n' + err.message);
           return;
         }
-      } catch (err) {
-        alert('Invalid JSON in attributes field:\n' + err.message);
-        return;
       }
-    }
-    
-    const ownerValue = el('#asset-owner').value;
-    const data = {
-      name: el('#asset-name').value,
-      type: el('#asset-type').value,
-      mac: el('#asset-mac').value || null,
-      ips: el('#asset-ips').value.split(',').map(ip => ip.trim()).filter(ip => ip),
-      owner_user_id: ownerValue ? parseInt(ownerValue, 10) : null,
-      attributes: attributes,
-      poll_enabled: el('#asset-poll-enabled').checked,
-      poll_type: el('#asset-poll-type').value,
-      poll_username: el('#asset-poll-username').value || null,
-      poll_password: el('#asset-poll-password').value || null,
-      poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
-    };
-    
-    if (id) {
-      // Update existing asset
-      console.log('Updating asset with ID:', id);
-      console.log('Update data:', {id, ...data});
-      api('asset_update', 'POST', {id, ...data}).then(async r => {
-        console.log('Update response:', r);
-        if (r.success || r.ok) {
-          // Save custom field values
-          await saveCustomFieldValues(id);
-          el('#asset-modal').close();
-          loadAssets();
-        } else {
-          alert('Error: ' + (r.message || r.error));
-        }
-      }).catch(err => {
-        console.error('Update error:', err);
-        alert('Failed to update asset: ' + err.message);
-      });
-    } else {
-      // Create new asset
-      console.log('Creating new asset');
-      console.log('Create data:', data);
-      api('asset_create', 'POST', data).then(async r => {
-        console.log('Create response:', r);
-        if (r.success || r.ok) {
-          // Save custom field values for new asset
-          const newAssetId = r.id;
-          if (newAssetId) {
-            await saveCustomFieldValues(newAssetId);
-          }
-          el('#asset-modal').close();
-          loadAssets();
-        } else {
-          alert('Error: ' + (r.message || r.error));
-        }
-      }).catch(err => {
-        console.error('Create error:', err);
-        alert('Failed to create asset: ' + err.message);
-      });
-    }
-  };
 
-  el('#confirm-delete').onclick = () => {
-    const id = el('#delete-modal').dataset.assetId;
-    api(`asset_delete&id=${id}`, 'POST').then(r => {
-      if (r.success || r.ok) {
-        el('#delete-modal').close();
-        loadAssets();
+      const ownerValue = el('#asset-owner').value;
+      const data = {
+        name: el('#asset-name').value,
+        type: el('#asset-type').value,
+        mac: el('#asset-mac').value || null,
+        ips: el('#asset-ips').value.split(',').map(ip => ip.trim()).filter(ip => ip),
+        owner_user_id: ownerValue ? parseInt(ownerValue, 10) : null,
+        attributes: attributes,
+        poll_enabled: el('#asset-poll-enabled').checked,
+        poll_type: el('#asset-poll-type').value,
+        poll_username: el('#asset-poll-username').value || null,
+        poll_password: el('#asset-poll-password').value || null,
+        poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
+      };
+
+      if (id) {
+        // Update existing asset
+        console.log('Updating asset with ID:', id);
+        console.log('Update data:', { id, ...data });
+        api('asset_update', 'POST', { id, ...data }).then(async r => {
+          console.log('Update response:', r);
+          if (r.success || r.ok) {
+            await saveCustomFieldValues(id);
+            el('#asset-modal').close();
+            loadAssets();
+          } else {
+            alert('Error: ' + (r.message || r.error));
+          }
+        }).catch(err => {
+          console.error('Update error:', err);
+          alert('Failed to update asset: ' + err.message);
+        });
       } else {
-        alert('Error: ' + (r.message || r.error));
+        // Create new asset
+        console.log('Creating new asset');
+        console.log('Create data:', data);
+        api('asset_create', 'POST', data).then(async r => {
+          console.log('Create response:', r);
+          if (r.success || r.ok) {
+            const newAssetId = r.id;
+            if (newAssetId) {
+              await saveCustomFieldValues(newAssetId);
+            }
+            el('#asset-modal').close();
+            loadAssets();
+          } else {
+            alert('Error: ' + (r.message || r.error));
+          }
+        }).catch(err => {
+          console.error('Create error:', err);
+          alert('Failed to create asset: ' + err.message);
+        });
       }
-    }).catch(err => {
-      alert('Failed to delete asset: ' + err.message);
-    });
-  };
+    };
+  }
+
+  const confirmDeleteBtn = el('#confirm-delete');
+  if (confirmDeleteBtn) {
+    confirmDeleteBtn.onclick = () => {
+      const id = el('#delete-modal').dataset.assetId;
+      api(`asset_delete&id=${id}`, 'POST').then(r => {
+        if (r.success || r.ok) {
+          el('#delete-modal').close();
+          loadAssets();
+        } else {
+          alert('Error: ' + (r.message || r.error));
+        }
+      }).catch(err => {
+        alert('Failed to delete asset: ' + err.message);
+      });
+    };
+  }
 
   el('#search').addEventListener('keyup', () => {
     const q = el('#search').value.toLowerCase();
