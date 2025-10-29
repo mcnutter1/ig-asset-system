@@ -41,7 +41,7 @@ let usersCache = [];
 let currentOwnerFilter = '';
 
 const loadUsers = () => {
-  api('users').then(users => {
+  return api('users').then(users => {
     usersCache = users || [];
     populateOwnerDropdowns();
   }).catch(err => {
@@ -70,11 +70,19 @@ const populateOwnerDropdowns = () => {
   }
 };
 
-const getOwnerDisplayName = (ownerId) => {
-  if (!ownerId) return '-';
-  const user = usersCache.find(u => u.id == ownerId);
-  if (!user) return `User #${ownerId}`;
-  return user.display_name || user.username;
+const getOwnerDisplayName = (asset) => {
+  // Prefer API-provided owner_name/owner_email if available
+  if (asset && asset.owner_name) {
+    const emailPart = asset.owner_email ? ` (${asset.owner_email})` : '';
+    return asset.owner_name + emailPart;
+  }
+  
+  // Fallback to client-side lookup
+  if (!asset || !asset.owner_user_id) return '-';
+  const user = usersCache.find(u => u.id == asset.owner_user_id);
+  if (!user) return `User #${asset.owner_user_id}`;
+  const emailPart = user.email ? ` (${user.email})` : '';
+  return (user.display_name || user.username) + emailPart;
 };
 
 // ============= SYSTEM STATUS =============
@@ -427,7 +435,7 @@ const loadAssets = () => {
       const ips = (a.ips || []).map(x => x.ip).join(', ') || '-';
       const statusColor = a.online_status === 'online' ? '#6dd17f' : '#ff6b6b';
       const lastSeen = a.updated_at ? new Date(a.updated_at).toLocaleString() : '-';
-      const ownerName = getOwnerDisplayName(a.owner_user_id);
+      const ownerName = getOwnerDisplayName(a);
       
       return `
         <tr>
@@ -456,7 +464,7 @@ const viewAsset = (id) => {
     const drawer = el('#drawer');
     const content = el('#asset-detail');
     const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
-    const ownerName = getOwnerDisplayName(a.owner_user_id);
+    const ownerName = getOwnerDisplayName(a);
     content.innerHTML = `
       <h3>${a.name}</h3>
       <div class="kv"><strong>Type:</strong> ${a.type}</div>
@@ -477,40 +485,51 @@ const viewAsset = (id) => {
 
 const editAsset = (id) => {
   console.log('editAsset called with id:', id);
-  api(`asset_get&id=${id}`).then(a => {
-    console.log('Asset data for edit:', a);
-    
-    // Check if we got valid data
-    if (!a || !a.id) {
-      alert('Failed to load asset: Invalid response from server');
-      console.error('Invalid asset data:', a);
-      return;
-    }
-    
-    el('#asset-id').value = a.id;
-    el('#asset-name').value = a.name || '';
-    el('#asset-type').value = a.type || '';
-    el('#asset-mac').value = a.mac || '';
-    el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
-    el('#asset-owner').value = a.owner_user_id || '';
-    
-    // Handle attributes - only show if exists and has content
-    const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
-    el('#asset-attributes').value = Object.keys(attrs).length > 0 ? JSON.stringify(attrs, null, 2) : '';
-    
-    // Polling fields
-    el('#asset-poll-enabled').checked = a.poll_enabled || false;
-    el('#asset-poll-type').value = a.poll_type || 'ping';
-    el('#asset-poll-username').value = a.poll_username || '';
-    el('#asset-poll-password').value = a.poll_password || '';
-    el('#asset-poll-port').value = a.poll_port || '';
-    
-    el('#modal-title').textContent = 'Edit Asset';
-    el('#asset-modal').showModal();
-  }).catch(err => {
-    console.error('Error loading asset for edit:', err);
-    alert('Failed to load asset: ' + err.message);
-  });
+  
+  // Ensure users are loaded before editing
+  const loadAssetData = () => {
+    api(`asset_get&id=${id}`).then(a => {
+      console.log('Asset data for edit:', a);
+      
+      // Check if we got valid data
+      if (!a || !a.id) {
+        alert('Failed to load asset: Invalid response from server');
+        console.error('Invalid asset data:', a);
+        return;
+      }
+      
+      el('#asset-id').value = a.id;
+      el('#asset-name').value = a.name || '';
+      el('#asset-type').value = a.type || '';
+      el('#asset-mac').value = a.mac || '';
+      el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
+      el('#asset-owner').value = a.owner_user_id || '';
+      
+      // Handle attributes - only show if exists and has content
+      const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
+      el('#asset-attributes').value = Object.keys(attrs).length > 0 ? JSON.stringify(attrs, null, 2) : '';
+      
+      // Polling fields
+      el('#asset-poll-enabled').checked = a.poll_enabled || false;
+      el('#asset-poll-type').value = a.poll_type || 'ping';
+      el('#asset-poll-username').value = a.poll_username || '';
+      el('#asset-poll-password').value = a.poll_password || '';
+      el('#asset-poll-port').value = a.poll_port || '';
+      
+      el('#modal-title').textContent = 'Edit Asset';
+      el('#asset-modal').showModal();
+    }).catch(err => {
+      console.error('Error loading asset for edit:', err);
+      alert('Failed to load asset: ' + err.message);
+    });
+  };
+  
+  // If users not loaded yet, load them first
+  if (usersCache.length === 0) {
+    loadUsers().then(() => loadAssetData());
+  } else {
+    loadAssetData();
+  }
 };
 
 const deleteAsset = (id) => {

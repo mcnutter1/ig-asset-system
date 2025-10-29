@@ -7,10 +7,21 @@ class AssetController {
     $pdo = DB::conn();
     if ($search) {
       $like = '%' . $search . '%';
-      $stmt = $pdo->prepare("SELECT * FROM assets WHERE name LIKE ? OR mac LIKE ? OR id LIKE ? ORDER BY updated_at DESC LIMIT 200");
+      $stmt = $pdo->prepare("
+        SELECT a.*, u.display_name as owner_name, u.email as owner_email 
+        FROM assets a 
+        LEFT JOIN users u ON a.owner_user_id = u.id 
+        WHERE a.name LIKE ? OR a.mac LIKE ? OR a.id LIKE ? 
+        ORDER BY a.updated_at DESC LIMIT 200
+      ");
       $stmt->execute([$like,$like,$like]);
     } else {
-      $stmt = $pdo->query("SELECT * FROM assets ORDER BY updated_at DESC LIMIT 200");
+      $stmt = $pdo->query("
+        SELECT a.*, u.display_name as owner_name, u.email as owner_email 
+        FROM assets a 
+        LEFT JOIN users u ON a.owner_user_id = u.id 
+        ORDER BY a.updated_at DESC LIMIT 200
+      ");
     }
     $rows = $stmt->fetchAll();
     foreach ($rows as &$r) {
@@ -22,7 +33,12 @@ class AssetController {
 
   public static function get($id) {
     $pdo = DB::conn();
-    $stmt = $pdo->prepare("SELECT * FROM assets WHERE id=?");
+    $stmt = $pdo->prepare("
+      SELECT a.*, u.display_name as owner_name, u.email as owner_email 
+      FROM assets a 
+      LEFT JOIN users u ON a.owner_user_id = u.id 
+      WHERE a.id=?
+    ");
     $stmt->execute([$id]);
     $asset = $stmt->fetch();
     if (!$asset) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }

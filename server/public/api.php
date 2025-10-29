@@ -9,6 +9,7 @@ require_once __DIR__ . '/../src/UserController.php';
 require_once __DIR__ . '/../src/SettingsController.php';
 require_once __DIR__ . '/../src/SystemController.php';
 require_once __DIR__ . '/../src/PollerController.php';
+require_once __DIR__ . '/../src/CustomFieldsController.php';
 
 cors_headers();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
@@ -198,6 +199,51 @@ switch ($action) {
     require_login();
     $since = $_GET['since'] ?? null;
     echo json_encode(PollerController::getLogs($since));
+    break;
+
+  // Custom Fields Management
+  case 'custom_fields':
+    require_login(); require_role('user');
+    CustomFieldsController::list();
+    break;
+
+  case 'custom_field_get':
+    require_login(); require_role('user');
+    CustomFieldsController::get($_GET['id'] ?? '');
+    break;
+
+  case 'custom_field_create':
+    require_login(); require_role('admin');
+    CustomFieldsController::create(json_input());
+    break;
+
+  case 'custom_field_update':
+    require_login(); require_role('admin');
+    $in = json_input();
+    $id = $in['id'] ?? '';
+    unset($in['id']);
+    CustomFieldsController::update($id, $in);
+    break;
+
+  case 'custom_field_delete':
+    require_login(); require_role('admin');
+    CustomFieldsController::delete($_GET['id'] ?? '');
+    break;
+
+  case 'custom_field_values':
+    require_login(); require_role('user');
+    CustomFieldsController::getValues($_GET['asset_id'] ?? '');
+    break;
+
+  case 'custom_field_set_value':
+    require_login(); require_role('user');
+    $in = json_input();
+    CustomFieldsController::setValue($in['asset_id'] ?? '', $in['field_id'] ?? '', $in['value'] ?? '');
+    break;
+
+  case 'custom_fields_for_type':
+    require_login(); require_role('user');
+    CustomFieldsController::getFieldsForType($_GET['type'] ?? '');
     break;
 
   default:
