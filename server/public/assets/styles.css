@@ -1,17 +1,17 @@
 /* Pico CSS Override for Dark Theme - Compact Professional Design */
 
 :root {
-  --form-element-valid-border-color: #6dd17f;
-  --form-element-invalid-border-color: #ff6b6b;
-  --primary-bg: #0b1220;
-  --secondary-bg: #111b36;
-  --tertiary-bg: #0e1730;
-  --border-color: #1e2a4a;
-  --accent-blue: #4a90e2;
-  --accent-green: #6dd17f;
-  --accent-red: #ff6b6b;
-  --text-primary: #d6e1ff;
-  --text-muted: #8b9dc3;
+  --form-element-valid-border-color: #2ba471;
+  --form-element-invalid-border-color: #d64545;
+  --primary-bg: #f4f7fb;
+  --secondary-bg: #ffffff;
+  --tertiary-bg: #eef2fb;
+  --border-color: #d6e1f0;
+  --accent-blue: #3563e9;
+  --accent-green: #2ba471;
+  --accent-red: #d64545;
+  --text-primary: #1f2937;
+  --text-muted: #64748b;
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -93,7 +93,7 @@ section.hidden {
   padding: var(--spacing-xl);
   max-width: 380px;
   width: 100%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
 }
 
 #login-panel h2 {
@@ -126,7 +126,7 @@ nav {
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-lg);
   gap: var(--spacing-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
 nav ul {
@@ -168,7 +168,7 @@ nav select {
 
 #asset-table thead {
   background: var(--tertiary-bg);
-  border-bottom: 2px solid var(--accent-blue);
+  border-bottom: 1px solid rgba(53, 99, 233, 0.25);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -190,7 +190,7 @@ nav select {
 }
 
 #asset-table tbody tr:hover {
-  background: var(--tertiary-bg);
+  background: rgba(53, 99, 233, 0.08);
 }
 
 #asset-table td {
@@ -222,7 +222,7 @@ nav select {
   z-index: 1000;
   transform: translateX(100%);
   transition: transform 0.25s ease;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
 }
 
 .drawer:not(.hidden) {
@@ -306,11 +306,11 @@ dialog {
   border-radius: 8px;
   max-width: 580px;
   padding: 0;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
 }
 
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.35);
 }
 
 dialog article {
@@ -353,7 +353,7 @@ dialog .modal-cancel {
 }
 
 dialog .modal-cancel:hover {
-  background: var(--tertiary-bg);
+  background: #e8edff;
   color: var(--text-primary);
 }
 
@@ -458,8 +458,8 @@ details[open] summary {
 }
 
 .settings-tab:hover {
-  background: #1a2847;
-  border-color: var(--accent-blue);
+  background: #e2e8ff;
+  border-color: rgba(53, 99, 233, 0.4);
   transform: translateY(-1px);
 }
 
@@ -467,7 +467,7 @@ details[open] summary {
   background: var(--accent-blue);
   border-color: var(--accent-blue);
   color: white;
-  box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+  box-shadow: 0 4px 14px rgba(53, 99, 233, 0.25);
 }
 
 .settings-panel {
@@ -527,8 +527,8 @@ details[open] summary {
 .health-item {
   padding: var(--spacing-md);
   margin: var(--spacing-xs) 0;
-  background: var(--tertiary-bg);
-  border-left: 3px solid var(--accent-blue);
+  background: #f8faff;
+  border-left: 3px solid rgba(53, 99, 233, 0.3);
   border-radius: 4px;
   font-size: 13px;
 }
@@ -603,7 +603,7 @@ footer {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.95);
+  background: rgba(15, 23, 42, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -617,17 +617,17 @@ footer {
 
 .bootstrap-content {
   background: var(--secondary-bg);
-  border: 2px solid var(--accent-red);
+  border: 2px solid rgba(214, 69, 69, 0.2);
   border-radius: 8px;
   padding: var(--spacing-xl);
   max-width: 500px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
 }
 
 /* Poller Logs */
 #poller-logs {
-  background: var(--tertiary-bg);
+  background: #f9fbff;
   border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: var(--spacing-md);
@@ -640,7 +640,7 @@ footer {
 
 #poller-logs > div {
   padding: var(--spacing-xs) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 #poller-logs > div:last-child {
@@ -704,12 +704,12 @@ footer {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: #c3cfe6;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-blue);
+  background: #aabce2;
 }
 
 /* Loading States */

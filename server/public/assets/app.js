@@ -22,6 +22,9 @@ const api = (action, method = 'GET', body = null, timeout = 30000) => {
     signal: controller.signal
   }).then(r => {
     clearTimeout(timeoutId);
+    if (r.status === 401) {
+      document.dispatchEvent(new CustomEvent('app:unauthorized'));
+    }
     if (!r.ok && r.status !== 401) {
       throw new Error(`HTTP ${r.status}: ${r.statusText}`);
     }
@@ -39,10 +42,17 @@ const elAll = sel => document.querySelectorAll(sel);
 // ============= USER MANAGEMENT =============
 let usersCache = [];
 let currentOwnerFilter = '';
+let currentUser = null;
+let pollingStatusTimer = null;
 
 const loadUsers = () => {
   return api('users').then(users => {
-    usersCache = users || [];
+    if (!Array.isArray(users)) {
+      console.warn('Unexpected users payload', users);
+      usersCache = [];
+    } else {
+      usersCache = users;
+    }
     populateOwnerDropdowns();
   }).catch(err => {
     console.error('Failed to load users:', err);
@@ -99,13 +109,68 @@ const checkSystemStatus = () => {
       el('#settings')?.classList.add('hidden');
     } else {
       warning?.classList.add('hidden');
-      login?.classList.remove('hidden');
+      if (!currentUser) {
+        login?.classList.remove('hidden');
+        main?.classList.add('hidden');
+      }
     }
   }).catch((err) => {
     console.error('System status check failed:', err);
     // Show login anyway if system status fails
     el('#bootstrap-warning')?.classList.add('hidden');
     el('#login-panel')?.classList.remove('hidden');
+  });
+};
+
+const setActiveUser = (user, { initialLoad = false } = {}) => {
+  currentUser = user;
+  const loginPanel = el('#login-panel');
+  const mainPanel = el('#main');
+  const settingsBtn = el('#settings-btn');
+
+  if (user) {
+    loginPanel?.classList.add('hidden');
+    mainPanel?.classList.remove('hidden');
+    if (settingsBtn) {
+      if (user.role === 'admin') {
+        settingsBtn.classList.remove('hidden');
+      } else {
+        settingsBtn.classList.add('hidden');
+      }
+    }
+    if (!pollingStatusTimer) {
+      pollingStatusTimer = setInterval(updatePollingStatus, 30000);
+    }
+    if (initialLoad) {
+      loadUsers();
+      loadAssets();
+      updatePollingStatus();
+    }
+  } else {
+    mainPanel?.classList.add('hidden');
+    loginPanel?.classList.remove('hidden');
+    settingsBtn?.classList.add('hidden');
+    el('#settings')?.classList.add('hidden');
+    currentOwnerFilter = '';
+    usersCache = [];
+    populateOwnerDropdowns();
+    if (pollingStatusTimer) {
+      clearInterval(pollingStatusTimer);
+      pollingStatusTimer = null;
+    }
+  }
+};
+
+const restoreSession = () => {
+  api('me').then(res => {
+    if (res && res.user) {
+      setActiveUser(res.user, { initialLoad: true });
+    } else {
+      setActiveUser(null);
+    }
+  }).catch(err => {
+    console.error('Failed to restore session:', err);
+    setActiveUser(null);
   });
 };
 
@@ -117,19 +182,16 @@ const setupAuthHandlers = () => {
     const username = el('#username').value;
     const password = el('#password').value;
 
-    el('#login-msg').textContent = 'Logging in...';
-    el('#login-msg').style.color = '#ffaa00';
+  el('#login-msg').textContent = 'Logging in...';
+  el('#login-msg').style.color = '#f59e0b';
 
     api('login', 'POST', { username, password }).then(r => {
       if (r.ok && r.user) {
-        el('#login-panel').classList.add('hidden');
-        el('#main').classList.remove('hidden');
-        el('#settings-btn').classList.remove('hidden');
-        loadAssets();
-        updatePollingStatus();
+        el('#login-msg').textContent = '';
+        setActiveUser(r.user, { initialLoad: true });
       } else {
-        el('#login-msg').textContent = 'Login failed: ' + (r.error || 'Invalid credentials');
-        el('#login-msg').style.color = '#ff6b6b';
+  el('#login-msg').textContent = 'Login failed: ' + (r.error || 'Invalid credentials');
+  el('#login-msg').style.color = '#d64545';
       }
     }).catch(err => {
       console.error('Login error:', err);
@@ -142,7 +204,7 @@ const setupAuthHandlers = () => {
         errorMsg += err.message || 'Network error';
       }
       el('#login-msg').textContent = errorMsg;
-      el('#login-msg').style.color = '#ff6b6b';
+  el('#login-msg').style.color = '#d64545';
     });
   };
 
@@ -272,10 +334,10 @@ const setupSettingsListeners = () => {
         const logLine = document.createElement('div');
         
         // Color code by level
-        let color = '#0f0'; // green for info
-        if (log.level === 'error') color = '#ff6b6b';
-        if (log.level === 'warning') color = '#ffaa00';
-        if (log.level === 'success') color = '#6dd17f';
+        let color = '#3563e9'; // info defaults to blue
+        if (log.level === 'error') color = '#d64545';
+        if (log.level === 'warning') color = '#f59e0b';
+        if (log.level === 'success') color = '#2ba471';
         
         logLine.style.color = color;
         logLine.textContent = `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`;
@@ -382,7 +444,7 @@ const loadCustomFields = () => {
     
     container.innerHTML = fields.map(field => {
       const appliesTo = field.applies_to_types ? field.applies_to_types.join(', ') : 'All asset types';
-      const required = field.is_required ? '<span style="color: #ff6b6b;">*</span>' : '';
+  const required = field.is_required ? '<span style="color: var(--accent-red);">*</span>' : '';
       return `
         <article style="padding: 15px; border: 1px solid var(--muted-border-color); border-radius: 4px;">
           <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -409,7 +471,7 @@ const loadCustomFields = () => {
     console.error('Failed to load custom fields:', err);
     const container = el('#custom-fields-list');
     if (container) {
-      container.innerHTML = '<p style="color: #ff6b6b;">Failed to load custom fields</p>';
+      container.innerHTML = '<p style="color: var(--accent-red);">Failed to load custom fields</p>';
     }
   });
 };
@@ -502,6 +564,7 @@ const showAlert = (elementId, message, type) => {
 
 // ============= POLLING STATUS =============
 const updatePollingStatus = () => {
+  if (!currentUser) return;
   api('poller_status').then(status => {
     const statusEl = el('#polling-status');
     const startBtn = el('#start-polling');
@@ -511,7 +574,7 @@ const updatePollingStatus = () => {
       : `Polling: Stopped (${status.targets_count} targets)`;
     if (statusEl) {
       statusEl.textContent = text;
-      statusEl.style.color = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
+  statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
     }
     if (startBtn) startBtn.disabled = status.status === 'running';
     if (stopBtn) stopBtn.disabled = status.status !== 'running';
@@ -526,6 +589,7 @@ const updatePollingStatus = () => {
 };
 
 const updatePollingStatusInSettings = () => {
+  if (!currentUser) return;
   api('poller_status').then(status => {
     const statusEl = el('#polling-status-settings');
     const startBtn = el('#start-polling-settings');
@@ -535,7 +599,7 @@ const updatePollingStatusInSettings = () => {
       : `Stopped (${status.targets_count} targets)`;
     if (statusEl) {
       statusEl.textContent = text;
-      statusEl.style.color = status.status === 'running' ? '#6dd17f' : '#ff6b6b';
+  statusEl.style.color = status.status === 'running' ? '#2ba471' : '#d64545';
     }
     if (startBtn) startBtn.disabled = status.status === 'running';
     if (stopBtn) stopBtn.disabled = status.status !== 'running';
@@ -569,13 +633,13 @@ const checkSystemHealth = () => {
 const loadAssets = () => {
   api('assets').then(assets => {
     const tbody = el('#asset-list');
-    if (!assets || assets.length === 0) {
+    if (!Array.isArray(assets) || assets.length === 0) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #888;">No assets found</td></tr>';
       return;
     }
     
     // Filter assets by owner if filter is set
-    let filteredAssets = assets;
+  let filteredAssets = assets;
     if (currentOwnerFilter) {
       filteredAssets = assets.filter(a => a.owner_user_id == currentOwnerFilter);
     }
@@ -587,7 +651,7 @@ const loadAssets = () => {
     
     tbody.innerHTML = filteredAssets.map(a => {
       const ips = (a.ips || []).map(x => x.ip).join(', ') || '-';
-      const statusColor = a.online_status === 'online' ? '#6dd17f' : '#ff6b6b';
+  const statusColor = a.online_status === 'online' ? '#2ba471' : '#d64545';
       const lastSeen = a.updated_at ? new Date(a.updated_at).toLocaleString() : '-';
       const ownerName = getOwnerDisplayName(a);
       
@@ -628,7 +692,7 @@ const renderCustomFieldsInModal = (assetType, customFieldValues = []) => {
       const fieldValue = customFieldValues.find(f => f.id === field.id);
       const value = fieldValue ? fieldValue.value : (field.default_value || '');
       const required = field.is_required ? 'required' : '';
-      const star = field.is_required ? '<span style="color: #ff6b6b;">*</span>' : '';
+  const star = field.is_required ? '<span style="color: var(--accent-red);">*</span>' : '';
       
       let inputHtml = '';
       
@@ -776,7 +840,7 @@ const editAsset = (id) => {
       el('#asset-type').value = a.type || '';
       el('#asset-mac').value = a.mac || '';
       el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
-      el('#asset-owner').value = a.owner_user_id || '';
+  el('#asset-owner').value = a.owner_user_id !== undefined && a.owner_user_id !== null ? String(a.owner_user_id) : '';
       
       // Handle attributes - only show if exists and has content
       const attrs = a.attributes && Object.keys(a.attributes).length > 0 ? a.attributes : {};
@@ -837,7 +901,7 @@ const setupAllHandlers = () => {
     el('#asset-type').value = '';
     el('#asset-mac').value = '';
     el('#asset-ips').value = '';
-    el('#asset-owner').value = '';
+  el('#asset-owner').value = '';
     el('#asset-attributes').value = '';
     el('#asset-poll-enabled').checked = false;
     el('#asset-poll-type').value = 'ping';
@@ -881,12 +945,13 @@ const setupAllHandlers = () => {
       }
     }
     
+    const ownerValue = el('#asset-owner').value;
     const data = {
       name: el('#asset-name').value,
       type: el('#asset-type').value,
       mac: el('#asset-mac').value || null,
       ips: el('#asset-ips').value.split(',').map(ip => ip.trim()).filter(ip => ip),
-      owner_user_id: el('#asset-owner').value || null,
+      owner_user_id: ownerValue ? parseInt(ownerValue, 10) : null,
       attributes: attributes,
       poll_enabled: el('#asset-poll-enabled').checked,
       poll_type: el('#asset-poll-type').value,
@@ -982,15 +1047,24 @@ const setupAllHandlers = () => {
   };
 };
 
+document.addEventListener('app:unauthorized', () => {
+  if (currentUser) {
+    setActiveUser(null);
+    const loginMsg = el('#login-msg');
+    if (loginMsg) {
+      loginMsg.textContent = 'Session expired. Please log in again.';
+      loginMsg.style.color = '#d64545';
+    }
+  }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   setupAuthHandlers();
   setupAllHandlers();
   setupSettingsListeners();
   checkSystemStatus();
-  updatePollingStatus();
-  setInterval(updatePollingStatus, 30000);
-  loadUsers(); // Load users for owner dropdowns
+  restoreSession();
   
   // Setup owner filter handler
   const ownerFilter = el('#owner-filter');

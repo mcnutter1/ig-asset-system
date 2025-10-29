@@ -78,13 +78,18 @@ class AssetController {
   public static function create($data, $actor='manual') {
     $pdo = DB::conn();
     $id = uuid_v4();
+    $ownerId = null;
+    if (array_key_exists('owner_user_id', $data) && $data['owner_user_id'] !== '' && $data['owner_user_id'] !== null) {
+      $ownerId = is_numeric($data['owner_user_id']) ? (int)$data['owner_user_id'] : null;
+    }
+
     $stmt = $pdo->prepare("INSERT INTO assets (id,name,type,mac,owner_user_id,source,poll_enabled,poll_type,poll_username,poll_password,poll_port) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
       $id,
       $data['name'] ?? 'Unnamed',
       $data['type'] ?? 'unknown',
       $data['mac'] ?? null,
-      $data['owner_user_id'] ?? null,
+  $ownerId,
       $actor === 'manual' ? 'manual' : $actor,
       $data['poll_enabled'] ?? false,
       $data['poll_type'] ?? 'ping',
@@ -106,6 +111,17 @@ class AssetController {
     if (!$old) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
 
     $fields = ['name','type','mac','owner_user_id','online_status','last_seen','poll_enabled','poll_type','poll_username','poll_password','poll_port'];
+
+    if (array_key_exists('owner_user_id', $data)) {
+      $value = $data['owner_user_id'];
+      if ($value === '' || $value === null) {
+        $data['owner_user_id'] = null;
+      } elseif (is_numeric($value)) {
+        $data['owner_user_id'] = (int)$value;
+      } else {
+        $data['owner_user_id'] = null;
+      }
+    }
     $sets = []; $vals = [];
     foreach ($fields as $f) {
       if (array_key_exists($f, $data)) {
