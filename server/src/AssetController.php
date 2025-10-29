@@ -27,6 +27,7 @@ class AssetController {
     foreach ($rows as &$r) {
       $r['ips'] = self::ips($r['id']);
       $r['attributes'] = self::attributes($r['id']);
+      $r['custom_fields'] = self::customFields($r['id']);
     }
     echo json_encode($rows);
   }
@@ -44,6 +45,7 @@ class AssetController {
     if (!$asset) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
     $asset['ips'] = self::ips($id);
     $asset['attributes'] = self::attributes($id);
+    $asset['custom_fields'] = self::customFields($id);
     $asset['changes'] = self::changes($id);
     echo json_encode($asset);
   }
@@ -144,6 +146,30 @@ class AssetController {
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     return $row ? json_decode($row['attributes'], true) : new stdClass();
+  }
+
+  private static function customFields($id) {
+    $pdo = DB::conn();
+    $stmt = $pdo->prepare("
+      SELECT cf.id, cf.name, cf.label, cf.field_type, cf.is_required, 
+             cf.select_options, cf.help_text, cf.default_value, cfv.value
+      FROM custom_fields cf
+      LEFT JOIN custom_field_values cfv ON cf.id = cfv.field_id AND cfv.asset_id = ?
+      ORDER BY cf.display_order ASC, cf.id ASC
+    ");
+    $stmt->execute([$id]);
+    $fields = $stmt->fetchAll();
+    
+    // Decode JSON fields and structure the result
+    $result = [];
+    foreach ($fields as $field) {
+      if ($field['select_options']) {
+        $field['select_options'] = json_decode($field['select_options'], true);
+      }
+      $result[] = $field;
+    }
+    
+    return $result;
   }
 
   private static function set_attributes($id, $attrs, $actor='manual') {

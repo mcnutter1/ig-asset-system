@@ -333,7 +333,161 @@ const setupSettingsListeners = () => {
       tab.classList.add('active');
       elAll('.settings-panel').forEach(p => p.style.display = 'none');
       el('#' + tabName + '-settings').style.display = 'block';
+      
+      // Load custom fields when that tab is opened
+      if (tabName === 'custom-fields') {
+        loadCustomFields();
+      }
     };
+  });
+
+  // Custom Fields Management
+  if (el('#add-custom-field-btn')) {
+    el('#add-custom-field-btn').onclick = () => {
+      el('#field-modal-title').textContent = 'Add Custom Field';
+      el('#field-id').value = '';
+      el('#custom-field-form').reset();
+      el('#custom-field-modal').showModal();
+    };
+  }
+
+  if (el('#custom-field-form')) {
+    el('#custom-field-form').onsubmit = (e) => {
+      e.preventDefault();
+      saveCustomField();
+    };
+  }
+
+  // Show/hide select options based on field type
+  if (el('#field-type')) {
+    el('#field-type').onchange = (e) => {
+      const selectOptionsContainer = el('#select-options-container');
+      if (selectOptionsContainer) {
+        selectOptionsContainer.style.display = e.target.value === 'select' ? 'block' : 'none';
+      }
+    };
+  }
+};
+
+// ============= CUSTOM FIELDS =============
+const loadCustomFields = () => {
+  api('custom_fields').then(fields => {
+    const container = el('#custom-fields-list');
+    if (!container) return;
+    
+    if (!fields || fields.length === 0) {
+      container.innerHTML = '<p style="color: var(--muted-color);">No custom fields defined yet. Click "Add Custom Field" to create one.</p>';
+      return;
+    }
+    
+    container.innerHTML = fields.map(field => {
+      const appliesTo = field.applies_to_types ? field.applies_to_types.join(', ') : 'All asset types';
+      const required = field.is_required ? '<span style="color: #ff6b6b;">*</span>' : '';
+      return `
+        <article style="padding: 15px; border: 1px solid var(--muted-border-color); border-radius: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="flex: 1;">
+              <h4 style="margin: 0 0 5px 0;">${field.label} ${required}</h4>
+              <div style="font-size: 0.9em; color: var(--muted-color);">
+                <div><strong>Name:</strong> ${field.name}</div>
+                <div><strong>Type:</strong> ${field.field_type}</div>
+                <div><strong>Applies to:</strong> ${appliesTo}</div>
+                ${field.help_text ? `<div><strong>Help:</strong> ${field.help_text}</div>` : ''}
+                ${field.default_value ? `<div><strong>Default:</strong> ${field.default_value}</div>` : ''}
+                <div><strong>Order:</strong> ${field.display_order}</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="secondary" style="padding: 6px 12px;" onclick="editCustomField(${field.id})">Edit</button>
+              <button class="contrast" style="padding: 6px 12px;" onclick="deleteCustomField(${field.id}, '${field.label}')">Delete</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join('');
+  }).catch(err => {
+    console.error('Failed to load custom fields:', err);
+    const container = el('#custom-fields-list');
+    if (container) {
+      container.innerHTML = '<p style="color: #ff6b6b;">Failed to load custom fields</p>';
+    }
+  });
+};
+
+const editCustomField = (id) => {
+  api(`custom_field_get&id=${id}`).then(field => {
+    el('#field-modal-title').textContent = 'Edit Custom Field';
+    el('#field-id').value = field.id;
+    el('#field-name').value = field.name;
+    el('#field-label').value = field.label;
+    el('#field-type').value = field.field_type;
+    el('#field-default-value').value = field.default_value || '';
+    el('#field-help-text').value = field.help_text || '';
+    el('#field-required').checked = field.is_required;
+    el('#field-display-order').value = field.display_order;
+    
+    // Handle applies_to_types
+    el('#field-applies-to').value = field.applies_to_types ? field.applies_to_types.join(', ') : '';
+    
+    // Handle select options
+    if (field.field_type === 'select' && field.select_options) {
+      el('#field-select-options').value = field.select_options.join('\n');
+      el('#select-options-container').style.display = 'block';
+    } else {
+      el('#select-options-container').style.display = 'none';
+    }
+    
+    el('#custom-field-modal').showModal();
+  }).catch(err => {
+    console.error('Failed to load field:', err);
+    alert('Failed to load field');
+  });
+};
+
+const deleteCustomField = (id, label) => {
+  if (!confirm(`Delete custom field "${label}"? This will remove all values for this field from all assets.`)) return;
+  
+  api(`custom_field_delete&id=${id}`, 'DELETE').then(() => {
+    loadCustomFields();
+  }).catch(err => {
+    console.error('Failed to delete field:', err);
+    alert('Failed to delete field');
+  });
+};
+
+const saveCustomField = () => {
+  const id = el('#field-id').value;
+  const data = {
+    name: el('#field-name').value,
+    label: el('#field-label').value,
+    field_type: el('#field-type').value,
+    is_required: el('#field-required').checked,
+    default_value: el('#field-default-value').value || null,
+    help_text: el('#field-help-text').value || null,
+    display_order: parseInt(el('#field-display-order').value) || 0
+  };
+  
+  // Handle applies_to_types
+  const appliesTo = el('#field-applies-to').value.trim();
+  data.applies_to_types = appliesTo ? appliesTo.split(',').map(t => t.trim()).filter(t => t) : null;
+  
+  // Handle select options
+  if (data.field_type === 'select') {
+    const options = el('#field-select-options').value.trim();
+    data.select_options = options ? options.split('\n').map(o => o.trim()).filter(o => o) : [];
+  } else {
+    data.select_options = null;
+  }
+  
+  const action = id ? 'custom_field_update' : 'custom_field_create';
+  if (id) data.id = id;
+  
+  api(action, 'POST', data).then(() => {
+    el('#custom-field-modal').close();
+    loadCustomFields();
+  }).catch(err => {
+    console.error('Failed to save field:', err);
+    alert('Failed to save field: ' + err.message);
   });
 };
 
@@ -457,6 +611,107 @@ const loadAssets = () => {
   });
 };
 
+// ============= CUSTOM FIELDS IN ASSETS =============
+const renderCustomFieldsInModal = (assetType, customFieldValues = []) => {
+  const container = el('#custom-fields-container');
+  if (!container) return;
+  
+  // Get fields applicable to this asset type
+  api(`custom_fields_for_type&type=${assetType || 'unknown'}`).then(fields => {
+    if (!fields || fields.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    
+    container.innerHTML = '<hr><h4 style="margin-top: 15px;">Custom Fields</h4>' + fields.map(field => {
+      // Find existing value for this field
+      const fieldValue = customFieldValues.find(f => f.id === field.id);
+      const value = fieldValue ? fieldValue.value : (field.default_value || '');
+      const required = field.is_required ? 'required' : '';
+      const star = field.is_required ? '<span style="color: #ff6b6b;">*</span>' : '';
+      
+      let inputHtml = '';
+      
+      switch (field.field_type) {
+        case 'text':
+        case 'email':
+        case 'url':
+          inputHtml = `<input type="${field.field_type}" id="cf-${field.id}" value="${value || ''}" ${required} placeholder="${field.default_value || ''}">`;
+          break;
+        case 'number':
+          inputHtml = `<input type="number" id="cf-${field.id}" value="${value || ''}" ${required}>`;
+          break;
+        case 'date':
+          inputHtml = `<input type="date" id="cf-${field.id}" value="${value || ''}" ${required}>`;
+          break;
+        case 'textarea':
+          inputHtml = `<textarea id="cf-${field.id}" rows="3" ${required}>${value || ''}</textarea>`;
+          break;
+        case 'checkbox':
+          const checked = value === 'true' || value === '1' || value === 'on' ? 'checked' : '';
+          inputHtml = `<input type="checkbox" id="cf-${field.id}" ${checked}>`;
+          break;
+        case 'select':
+          const options = field.select_options || [];
+          inputHtml = `<select id="cf-${field.id}" ${required}>
+            <option value="">Select...</option>
+            ${options.map(opt => `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+          </select>`;
+          break;
+      }
+      
+      return `
+        <label data-field-id="${field.id}">
+          ${field.label} ${star}
+          ${inputHtml}
+          ${field.help_text ? `<small>${field.help_text}</small>` : ''}
+        </label>
+      `;
+    }).join('');
+  }).catch(err => {
+    console.error('Failed to load custom fields:', err);
+    container.innerHTML = '';
+  });
+};
+
+const getCustomFieldValues = () => {
+  const container = el('#custom-fields-container');
+  if (!container) return {};
+  
+  const values = {};
+  const labels = container.querySelectorAll('label[data-field-id]');
+  
+  labels.forEach(label => {
+    const fieldId = label.dataset.fieldId;
+    const input = label.querySelector('input, select, textarea');
+    if (!input) return;
+    
+    if (input.type === 'checkbox') {
+      values[fieldId] = input.checked ? 'true' : 'false';
+    } else {
+      values[fieldId] = input.value;
+    }
+  });
+  
+  return values;
+};
+
+const saveCustomFieldValues = async (assetId) => {
+  const values = getCustomFieldValues();
+  
+  for (const [fieldId, value] of Object.entries(values)) {
+    try {
+      await api('custom_field_set_value', 'POST', {
+        asset_id: assetId,
+        field_id: parseInt(fieldId),
+        value: value
+      });
+    } catch (err) {
+      console.error(`Failed to save custom field ${fieldId}:`, err);
+    }
+  }
+};
+
 const viewAsset = (id) => {
   console.log('viewAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
@@ -465,6 +720,23 @@ const viewAsset = (id) => {
     const content = el('#asset-detail');
     const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
     const ownerName = getOwnerDisplayName(a);
+    
+    // Build custom fields display
+    let customFieldsHtml = '';
+    if (a.custom_fields && a.custom_fields.length > 0) {
+      const fieldsWithValues = a.custom_fields.filter(f => f.value);
+      if (fieldsWithValues.length > 0) {
+        customFieldsHtml = '<hr><h4>Custom Fields</h4>';
+        fieldsWithValues.forEach(field => {
+          let displayValue = field.value;
+          if (field.field_type === 'checkbox') {
+            displayValue = (field.value === 'true' || field.value === '1') ? '✓ Yes' : '✗ No';
+          }
+          customFieldsHtml += `<div class="kv"><strong>${field.label}:</strong> ${displayValue}</div>`;
+        });
+      }
+    }
+    
     content.innerHTML = `
       <h3>${a.name}</h3>
       <div class="kv"><strong>Type:</strong> ${a.type}</div>
@@ -474,7 +746,8 @@ const viewAsset = (id) => {
       <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
       <div class="kv"><strong>Created:</strong> ${a.created_at}</div>
       <div class="kv"><strong>Updated:</strong> ${a.updated_at}</div>
-      ${hasAttributes ? `<div class="kv"><strong>Attributes:</strong></div><pre>${JSON.stringify(a.attributes, null, 2)}</pre>` : ''}
+      ${customFieldsHtml}
+      ${hasAttributes ? `<hr><div class="kv"><strong>Attributes:</strong></div><pre>${JSON.stringify(a.attributes, null, 2)}</pre>` : ''}
     `;
     drawer.classList.remove('hidden');
   }).catch(err => {
@@ -515,6 +788,9 @@ const editAsset = (id) => {
       el('#asset-poll-username').value = a.poll_username || '';
       el('#asset-poll-password').value = a.poll_password || '';
       el('#asset-poll-port').value = a.poll_port || '';
+      
+      // Load custom fields for this asset type
+      renderCustomFieldsInModal(a.type, a.custom_fields || []);
       
       el('#modal-title').textContent = 'Edit Asset';
       el('#asset-modal').showModal();
@@ -569,10 +845,23 @@ const setupAllHandlers = () => {
     el('#asset-poll-password').value = '';
     el('#asset-poll-port').value = '';
     el('#modal-title').textContent = 'Add Asset';
+    // Load custom fields for new asset
+    renderCustomFieldsInModal('', []);
     el('#asset-modal').showModal();
   };
 
-  el('#asset-form').onsubmit = (e) => {
+  // Listen to asset type changes to update custom fields dynamically
+  if (el('#asset-type')) {
+    el('#asset-type').onchange = (e) => {
+      const assetId = el('#asset-id').value;
+      if (!assetId) {
+        // Only reload fields for new assets
+        renderCustomFieldsInModal(e.target.value, []);
+      }
+    };
+  }
+
+  el('#asset-form').onsubmit = async (e) => {
     e.preventDefault();
     const id = el('#asset-id').value;
     
@@ -610,9 +899,11 @@ const setupAllHandlers = () => {
       // Update existing asset
       console.log('Updating asset with ID:', id);
       console.log('Update data:', {id, ...data});
-      api('asset_update', 'POST', {id, ...data}).then(r => {
+      api('asset_update', 'POST', {id, ...data}).then(async r => {
         console.log('Update response:', r);
         if (r.success || r.ok) {
+          // Save custom field values
+          await saveCustomFieldValues(id);
           el('#asset-modal').close();
           loadAssets();
         } else {
@@ -626,9 +917,14 @@ const setupAllHandlers = () => {
       // Create new asset
       console.log('Creating new asset');
       console.log('Create data:', data);
-      api('asset_create', 'POST', data).then(r => {
+      api('asset_create', 'POST', data).then(async r => {
         console.log('Create response:', r);
         if (r.success || r.ok) {
+          // Save custom field values for new asset
+          const newAssetId = r.id;
+          if (newAssetId) {
+            await saveCustomFieldValues(newAssetId);
+          }
           el('#asset-modal').close();
           loadAssets();
         } else {

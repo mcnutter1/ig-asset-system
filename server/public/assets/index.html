@@ -138,6 +138,9 @@
               </select>
               <small>Assign this asset to a user</small>
             </label>
+
+            <!-- Custom Fields Container -->
+            <div id="custom-fields-container"></div>
             
             <details>
               <summary>Attributes (JSON)</summary>
@@ -218,6 +221,7 @@
           <ul>
             <li><a href="#ldap-settings" class="settings-tab active" data-tab="ldap">LDAP Settings</a></li>
             <li><a href="#poller-settings" class="settings-tab" data-tab="poller">Polling</a></li>
+            <li><a href="#custom-fields-settings" class="settings-tab" data-tab="custom-fields">Custom Fields</a></li>
             <li><a href="#system-settings" class="settings-tab" data-tab="system">System</a></li>
           </ul>
         </nav>
@@ -332,6 +336,20 @@
           </form>
         </article>
 
+        <!-- Custom Fields Settings Panel -->
+        <article id="custom-fields-settings" class="settings-panel" style="display: none;">
+          <h3>Custom Fields Management</h3>
+          <p style="color: var(--muted-color); margin-bottom: 20px;">
+            Create custom fields that will appear when viewing or editing assets. Fields can be applied to all asset types or specific types only.
+          </p>
+
+          <button id="add-custom-field-btn" style="margin-bottom: 20px;">+ Add Custom Field</button>
+
+          <div id="custom-fields-list" style="display: grid; gap: 15px;">
+            <!-- Custom fields will be loaded here -->
+          </div>
+        </article>
+
         <!-- System Settings Panel -->
         <article id="system-settings" class="settings-panel" style="display: none;">
           <h3>System Information</h3>
@@ -348,6 +366,75 @@
         </article>
       </div>
     </section>
+
+    <!-- Custom Field Edit Modal -->
+    <dialog id="custom-field-modal">
+      <article style="width: 600px;">
+        <header>
+          <h3 id="field-modal-title">Add Custom Field</h3>
+          <button aria-label="Close" rel="prev" onclick="document.getElementById('custom-field-modal').close()"></button>
+        </header>
+        <form id="custom-field-form">
+          <input type="hidden" id="field-id">
+          
+          <label>Field Name (identifier, snake_case)
+            <input type="text" id="field-name" placeholder="serial_number" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+          </label>
+
+          <label>Display Label
+            <input type="text" id="field-label" placeholder="Serial Number" required>
+          </label>
+
+          <label>Field Type
+            <select id="field-type" required>
+              <option value="text">Text</option>
+              <option value="textarea">Text Area</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+              <option value="select">Dropdown Select</option>
+              <option value="checkbox">Checkbox</option>
+              <option value="email">Email</option>
+              <option value="url">URL</option>
+            </select>
+          </label>
+
+          <div id="select-options-container" style="display: none;">
+            <label>Dropdown Options (one per line)
+              <textarea id="field-select-options" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
+              <small>Enter each option on a new line</small>
+            </label>
+          </div>
+
+          <label>Default Value
+            <input type="text" id="field-default-value" placeholder="Optional default value">
+          </label>
+
+          <label>Help Text
+            <input type="text" id="field-help-text" placeholder="Help text shown to users">
+          </label>
+
+          <label>
+            <input type="checkbox" id="field-required">
+            Required Field
+          </label>
+
+          <label>Apply to Asset Types (leave empty for all types)
+            <input type="text" id="field-applies-to" placeholder="server, workstation, network-device (comma-separated)">
+            <small>Leave empty to apply to all asset types, or specify comma-separated types</small>
+          </label>
+
+          <label>Display Order
+            <input type="number" id="field-display-order" value="0" min="0" step="10">
+            <small>Controls the order fields appear (lower numbers first)</small>
+          </label>
+
+          <footer style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" class="secondary" onclick="document.getElementById('custom-field-modal').close()">Cancel</button>
+            <button type="submit">Save Field</button>
+          </footer>
+        </form>
+      </article>
+    </dialog>
   </div>
 
   <script src="/assets/app.js"></script>
