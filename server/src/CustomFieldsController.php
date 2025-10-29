@@ -51,8 +51,10 @@ class CustomFieldsController {
     $pdo = DB::conn();
     
     // Encode JSON fields
-    $select_options = isset($data['select_options']) ? json_encode($data['select_options']) : null;
-    $applies_to_types = isset($data['applies_to_types']) ? json_encode($data['applies_to_types']) : null;
+    $select_options = self::prepareJsonField($data['select_options'] ?? null);
+    $applies_to_types = self::prepareJsonField($data['applies_to_types'] ?? null);
+    $is_required = self::normalizeBoolean($data['is_required'] ?? false);
+    $display_order = self::normalizeInteger($data['display_order'] ?? 0);
     
     $stmt = $pdo->prepare("
       INSERT INTO custom_fields 
@@ -64,11 +66,11 @@ class CustomFieldsController {
       $data['name'] ?? '',
       $data['label'] ?? '',
       $data['field_type'] ?? 'text',
-      $data['is_required'] ?? false,
+      $is_required,
       $data['default_value'] ?? null,
       $select_options,
       $applies_to_types,
-      $data['display_order'] ?? 0,
+      $display_order,
       $data['help_text'] ?? null
     ]);
     
@@ -90,8 +92,10 @@ class CustomFieldsController {
     }
     
     // Encode JSON fields
-    $select_options = isset($data['select_options']) ? json_encode($data['select_options']) : null;
-    $applies_to_types = isset($data['applies_to_types']) ? json_encode($data['applies_to_types']) : null;
+    $select_options = self::prepareJsonField($data['select_options'] ?? null);
+    $applies_to_types = self::prepareJsonField($data['applies_to_types'] ?? null);
+    $is_required = self::normalizeBoolean($data['is_required'] ?? false);
+    $display_order = self::normalizeInteger($data['display_order'] ?? 0);
     
     $stmt = $pdo->prepare("
       UPDATE custom_fields SET
@@ -111,11 +115,11 @@ class CustomFieldsController {
       $data['name'] ?? '',
       $data['label'] ?? '',
       $data['field_type'] ?? 'text',
-      $data['is_required'] ?? false,
+      $is_required,
       $data['default_value'] ?? null,
       $select_options,
       $applies_to_types,
-      $data['display_order'] ?? 0,
+      $display_order,
       $data['help_text'] ?? null,
       $id
     ]);
@@ -202,6 +206,53 @@ class CustomFieldsController {
     }
     
     echo json_encode($applicable_fields);
+  }
+
+  private static function normalizeBoolean($value): int {
+    if (is_bool($value)) {
+      return $value ? 1 : 0;
+    }
+    if (is_numeric($value)) {
+      return ((int) $value) ? 1 : 0;
+    }
+    if (is_string($value)) {
+      $normalized = strtolower(trim($value));
+      if ($normalized === '') {
+        return 0;
+      }
+      return in_array($normalized, ['1', 'true', 'yes', 'on'], true) ? 1 : 0;
+    }
+    return 0;
+  }
+
+  private static function normalizeInteger($value, $default = 0): int {
+    if (is_numeric($value)) {
+      return (int) $value;
+    }
+    if (is_string($value)) {
+      $trimmed = trim($value);
+      return is_numeric($trimmed) ? (int) $trimmed : (int) $default;
+    }
+    return (int) $default;
+  }
+
+  private static function prepareJsonField($value): ?string {
+    if ($value === null) {
+      return null;
+    }
+    if (is_string($value)) {
+      $trimmed = trim($value);
+      if ($trimmed === '') {
+        return null;
+      }
+      $decoded = json_decode($trimmed, true);
+      if (json_last_error() === JSON_ERROR_NONE) {
+        $value = $decoded;
+      } else {
+        return json_encode($trimmed);
+      }
+    }
+    return json_encode($value);
   }
 }
 ?>

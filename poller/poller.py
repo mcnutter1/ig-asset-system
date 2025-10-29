@@ -106,11 +106,26 @@ def connect_ssh(target):
 
 
 def collect_unix_os_info(ssh, os_hint='linux'):
-    os_info = {'family': (os_hint or 'unknown').lower()}
+    hint = (os_hint or 'unknown').lower()
+    if 'bsd' in hint:
+        hint = 'bsd'
+    os_info = {'family': hint}
+
     uname_s, _ = run_ssh_command(ssh, 'uname -s')
-    if uname_s:
-        os_info['kernel_name'] = uname_s
-        os_info['family'] = uname_s.lower()
+    kernel_name = (uname_s or '').strip()
+    kernel_lower = kernel_name.lower()
+    if kernel_name:
+        os_info['kernel_name'] = kernel_name
+        if 'bsd' in kernel_lower:
+            os_info['family'] = 'bsd'
+            os_info['distribution'] = kernel_name
+        elif kernel_lower in ('linux', 'gnu/linux'):
+            os_info['family'] = 'linux'
+        elif kernel_lower in ('darwin', 'macos', 'mac os x'):
+            os_info['family'] = 'macos'
+        else:
+            os_info['family'] = kernel_lower or os_info['family']
+
     uname_r, _ = run_ssh_command(ssh, 'uname -r')
     if uname_r:
         os_info['kernel_release'] = uname_r
@@ -129,9 +144,14 @@ def collect_unix_os_info(ssh, os_hint='linux'):
             os_info['version'] = kv.get('VERSION') or kv.get('VERSION_ID')
             os_info['id'] = kv.get('ID')
             if kv.get('ID'):
-                os_info['family'] = kv['ID'].lower()
+                distro_id = kv['ID'].lower()
+                if 'bsd' in distro_id:
+                    os_info['family'] = 'bsd'
+                    os_info['distribution'] = kv.get('NAME') or kernel_name or distro_id
+                else:
+                    os_info['family'] = distro_id
     else:
-        if os_info['family'].startswith('freebsd') or os_hint.startswith('bsd'):
+        if 'bsd' in kernel_lower or 'bsd' in hint:
             os_info['family'] = 'bsd'
             vers, _ = run_ssh_command(ssh, 'sysctl -n kern.version')
             if vers:
@@ -139,6 +159,11 @@ def collect_unix_os_info(ssh, os_hint='linux'):
             name, _ = run_ssh_command(ssh, 'sysctl -n kern.ostype')
             if name:
                 os_info['name'] = name.strip()
+                os_info.setdefault('distribution', name.strip())
+
+    if 'bsd' in os_info.get('family', '') and not os_info.get('distribution') and kernel_name:
+        os_info['distribution'] = kernel_name
+
     return os_info
 
 

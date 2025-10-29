@@ -91,94 +91,94 @@
       <div id="drawer" class="drawer hidden">
         <div class="drawer-content">
           <button class="close">&times;</button>
-          <div id="asset-detail"></div>
-        </div>
-      </div>
+          <form id="custom-field-form">
+            <div class="modal-body">
+              <input type="hidden" id="field-id">
+            
+              <label>Field Name (identifier, snake_case)
+                <input type="text" id="field-name" placeholder="serial_number" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+              </label>
 
-      <!-- Asset Modal -->
-      <dialog id="asset-modal">
-        <article>
-          <header>
-            <h3 id="modal-title">Add Asset</h3>
-            <button type="button" aria-label="Close" class="modal-close"></button>
-          </header>
-          <form id="asset-form">
-            <input type="hidden" id="asset-id">
-            
-            <label>Asset Name
-              <input type="text" id="asset-name" placeholder="Asset Name" required>
-            </label>
-            
-            <label>Type
-              <select id="asset-type">
-                <option value="">Select Type...</option>
-                <option value="workstation">Workstation</option>
-                <option value="server">Server</option>
-                <option value="iot">IoT Device</option>
-                <option value="network">Network Equipment</option>
-                <option value="mobile">Mobile Device</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </label>
-            
-            <label>MAC Address
-              <input type="text" id="asset-mac" placeholder="00:11:22:33:44:55">
-            </label>
-            
-            <label>IP Addresses (comma-separated)
-              <input type="text" id="asset-ips" placeholder="192.168.1.10, 10.0.0.5">
-            </label>
-            
-            <label>Asset Owner
-              <select id="asset-owner">
-                <option value="">No Owner</option>
-              </select>
-              <small>Assign this asset to a user</small>
-            </label>
+              <label>Display Label
+                <input type="text" id="field-label" placeholder="Serial Number" required>
+              </label>
 
-            <!-- Custom Fields Container -->
-            <div id="custom-fields-container"></div>
-            
-            <details>
-              <summary>Attributes (JSON)</summary>
-              <textarea id="asset-attributes" rows="4" placeholder='{"key": "value"}'></textarea>
-            </details>
-            
-            <hr>
-            <h4>Polling Configuration</h4>
-            
-            <label>
-              <input type="checkbox" id="asset-poll-enabled">
-              Enable Polling
-            </label>
-            
-            <label>Poll Type
-              <select id="asset-poll-type">
-                <option value="ping">Ping (Online Check Only)</option>
-                <option value="ssh">SSH (Linux/Unix)</option>
-                <option value="wmi">WMI (Windows)</option>
-                <option value="snmp">SNMP</option>
-              </select>
-            </label>
-            
-            <label>Poll Username (for SSH/WMI)
-              <input type="text" id="asset-poll-username" placeholder="admin">
-            </label>
-            
-            <label>Poll Password (for SSH/WMI)
-              <input type="password" id="asset-poll-password" placeholder="Password">
-            </label>
-            
-            <label>Poll Port (optional)
-              <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
-            </label>
-            
-            <hr>
-            
-            <div style="display: flex; gap: 10px;">
-              <button type="submit">Save Asset</button>
-              <button type="button" class="secondary modal-cancel">Cancel</button>
+              <label>Field Type
+                <select id="field-type" required>
+                  <option value="text">Text</option>
+                  <option value="textarea">Text Area</option>
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                  <option value="select">Dropdown Select</option>
+                  <option value="checkbox">Checkbox</option>
+                  <option value="email">Email</option>
+                  <option value="url">URL</option>
+                </select>
+              </label>
+
+              <div id="select-options-container" style="display: none;">
+                <label>Select Options (comma-separated)
+                  <input type="text" id="select-options" placeholder="Option 1, Option 2, Option 3">
+                </label>
+              </div>
+
+              <label>Help Text (optional)
+                <textarea id="field-help" rows="2" placeholder="Shown to users when filling out this field"></textarea>
+              </label>
+
+              <label>Default Value (optional)
+                <input type="text" id="field-default" placeholder="Default value">
+              </label>
+
+              <label>Applies To Asset Types (comma-separated)
+                <input type="text" id="field-applies-to" placeholder="server, workstation">
+                <small>Leave blank to apply to all asset types.</small>
+              </label>
+
+              <label>Display Order
+                <input type="number" id="field-order" min="0" step="1" value="0">
+                <small>Fields are sorted ascending by this number.</small>
+              </label>
+
+              <label>
+                <input type="checkbox" id="field-required">
+                Field is required
+              </label>
             </div>
+            <footer class="modal-footer">
+              <button type="button" class="secondary" onclick="document.getElementById('custom-field-modal').close()">Cancel</button>
+              <button type="submit">Save Field</button>
+            </footer>
+          </form>
+                <input type="checkbox" id="asset-poll-enabled">
+                Enable Polling
+              </label>
+              
+              <label>Poll Type
+                <select id="asset-poll-type">
+                  <option value="ping">Ping (Online Check Only)</option>
+                  <option value="ssh">SSH (Linux/Unix)</option>
+                  <option value="wmi">WMI (Windows)</option>
+                  <option value="snmp">SNMP</option>
+                </select>
+              </label>
+              
+              <label>Poll Username (for SSH/WMI)
+                <input type="text" id="asset-poll-username" placeholder="admin">
+              </label>
+              
+              <label>Poll Password (for SSH/WMI)
+                <input type="password" id="asset-poll-password" placeholder="Password">
+              </label>
+              
+              <label>Poll Port (optional)
+                <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
+              </label>
+            </div>
+            <footer class="modal-footer">
+              <button type="button" class="secondary modal-cancel">Cancel</button>
+              <button type="submit">Save Asset</button>
+            </footer>
           </form>
         </article>
       </dialog>
@@ -208,12 +208,14 @@
             <button type="button" aria-label="Close" class="modal-close"></button>
           </header>
           <form id="column-form">
-            <fieldset>
-              <legend>Select the columns you want to see</legend>
-              <div id="column-options" class="column-options-grid"></div>
-            </fieldset>
-            <p id="column-error" class="form-error hidden"></p>
-            <footer style="display: flex; align-items: center; gap: var(--spacing-sm);">
+            <div class="modal-body">
+              <fieldset>
+                <legend>Select the columns you want to see</legend>
+                <div id="column-options" class="column-options-grid"></div>
+              </fieldset>
+              <p id="column-error" class="form-error hidden"></p>
+            </div>
+            <footer class="modal-footer">
               <button type="button" id="reset-columns" class="secondary">Reset to Default</button>
               <span class="flex-spacer"></span>
               <button type="button" class="secondary modal-cancel">Cancel</button>

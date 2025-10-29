@@ -25,7 +25,7 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -163,7 +163,8 @@ nav select {
   width: 100%;
   margin: 0;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 #asset-table thead {
@@ -178,9 +179,9 @@ nav select {
   padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 0.85rem;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   color: var(--text-primary);
 }
 
@@ -200,6 +201,7 @@ nav select {
 #asset-table td {
   padding: var(--spacing-sm) var(--spacing-md);
   vertical-align: middle;
+  font-size: 0.95rem;
 }
 
 #asset-table td.actions-cell {
@@ -372,6 +374,9 @@ dialog::backdrop {
 dialog article {
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
 }
 
 dialog header {
@@ -391,16 +396,17 @@ dialog header .modal-close {
   position: absolute;
   top: var(--spacing-sm);
   right: var(--spacing-sm);
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--accent-blue);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 24px;
+  font-weight: 600;
   padding: 0 !important;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -423,9 +429,10 @@ dialog header .modal-close:focus-visible {
 }
 
 dialog form {
-  padding: var(--spacing-lg);
-  max-height: 70vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0;
 }
 
 dialog fieldset {
@@ -441,15 +448,30 @@ dialog fieldset legend {
   padding: 0 var(--spacing-sm);
 }
 
-dialog footer {
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--border-color);
-  margin-top: var(--spacing-lg);
-  background: var(--tertiary-bg);
+dialog .modal-body {
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
-dialog button {
-  margin-right: var(--spacing-sm) !important;
+dialog .modal-footer {
+  position: sticky;
+  bottom: 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--border-color);
+  background: var(--secondary-bg);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  z-index: 5;
+}
+
+dialog .modal-footer button {
+  margin: 0 !important;
 }
 
 dialog .modal-cancel {
