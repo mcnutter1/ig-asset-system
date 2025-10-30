@@ -21,5 +21,6 @@
 
 - The Python poller now targets Windows hosts using a tiered strategy: it prefers native WMI/DCOM (via Impacket) and automatically falls back to WinRM/PowerShell (via pywinrm) when DCOM is blocked.
 - Collected datasets mirror the Unix probe: OS identity, architecture, boot time, adapter inventory (with MAC/IP details), disk usage, hardware metadata, and an optional installed applications list.
-- Configure Windows credentials in `poller/config.yml`; optional keys such as `domain`, `winrm_transport`, `winrm_use_ssl`, `applications_limit`, and `collect_applications` fine-tune authentication and inventory breadth.
+- Configure Windows credentials in `poller/config.yml`; optional keys such as `domain`, `winrm_transport`, `winrm_use_ssl`, `applications_limit`, and `collect_applications` fine-tune authentication and inventory breadth. Leaving these fields empty falls back to safe defaults (NTLM over 5985/5986 with 30s/20s timeouts), and setting `collect_applications: false` now skips software enumeration entirely.
 - Results are merged into the standard asset payload so existing API/UX surfaces immediately benefit from richer Windows telemetry.
+- For ad-hoc validation, run `python poller/manual_windows_probe.py --pretty --host <host> --username <user> --password <pass>` (optionally seeding values from `poller/config.yml`) to exercise the collector outside the main poller loop.

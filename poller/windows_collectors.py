@@ -145,15 +145,18 @@ def _collect_via_wmi(target: Dict[str, Any]) -> Dict[str, Any]:
         disk_rows = _wmi_query(services, "SELECT DeviceID, Size, FreeSpace, FileSystem, VolumeName FROM Win32_LogicalDisk WHERE DriveType = 3")
 
         apps_rows: List[Dict[str, Any]] = []
-        if target.get("collect_applications", True):
-            try:
-                apps_rows = _wmi_query(
-                    services,
-                    "SELECT Name, Version, Vendor, InstallDate FROM Win32_Product",
-                    limit=int(target.get("applications_limit", 200)),
-                )
-            except Exception:  # pragma: no cover - Win32_Product may be disabled
-                apps_rows = []
+        collect_apps = _bool_with_default(target.get("collect_applications"), True)
+        if collect_apps:
+            app_limit = _int_with_default(target.get("applications_limit"), 200)
+            if app_limit > 0:
+                try:
+                    apps_rows = _wmi_query(
+                        services,
+                        "SELECT Name, Version, Vendor, InstallDate FROM Win32_Product",
+                        limit=app_limit,
+                    )
+                except Exception:  # pragma: no cover - Win32_Product may be disabled
+                    apps_rows = []
     finally:
         if services is not None:
             try:
@@ -186,12 +189,17 @@ def _collect_via_winrm(target: Dict[str, Any]) -> Dict[str, Any]:
     if not host:
         raise WindowsProbeError("Missing host for Windows target")
 
-    use_ssl = bool(target.get("winrm_use_ssl", False))
-    port = int(target.get("winrm_port") or (5986 if use_ssl else 5985))
-    transport = target.get("winrm_transport", "ntlm")
-    validate_cert = bool(target.get("winrm_validate_cert", False))
-    read_timeout = int(target.get("winrm_read_timeout", 30))
-    operation_timeout = int(target.get("winrm_operation_timeout", 20))
+    use_ssl = _bool_with_default(target.get("winrm_use_ssl"), False)
+    port = _int_with_default(target.get("winrm_port"), 5986 if use_ssl else 5985)
+    transport_value = target.get("winrm_transport")
+    transport = transport_value.strip() if isinstance(transport_value, str) else transport_value
+    if not transport:
+        transport = "ntlm"
+    elif isinstance(transport, str):
+        transport = transport.lower()
+    validate_cert = _bool_with_default(target.get("winrm_validate_cert"), False)
+    read_timeout = _int_with_default(target.get("winrm_read_timeout"), 30)
+    operation_timeout = _int_with_default(target.get("winrm_operation_timeout"), 20)
 
     endpoint = f"http{'s' if use_ssl else ''}://{host}:{port}/wsman"
     session = winrm.Session(
@@ -203,7 +211,10 @@ def _collect_via_winrm(target: Dict[str, Any]) -> Dict[str, Any]:
         operation_timeout_sec=operation_timeout,
     )
 
-    app_limit = int(target.get("applications_limit", 200))
+    collect_apps = _bool_with_default(target.get("collect_applications"), True)
+    app_limit = _int_with_default(target.get("applications_limit"), 200)
+    if not collect_apps or app_limit <= 0:
+        app_limit = 0
     script = _WINRM_COLLECTION_SCRIPT_TEMPLATE.replace("__APP_LIMIT__", str(app_limit))
     result = session.run_ps(script)
 
@@ -666,6 +677,26 @@ def _as_list(value: Any) -> List[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _int_with_default(value: Any, default: int) -> int:
+    parsed = _to_int(value)
+    return parsed if parsed is not None else default
+
+
+def _bool_with_default(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("true", "1", "yes", "y", "on"):
+            return True
+        if lowered in ("false", "0", "no", "n", "off"):
+            return False
+        return default if lowered == "" else bool(lowered)
+    return bool(value)
 
 
 def _to_int(value: Any) -> Optional[int]:
