@@ -84,6 +84,9 @@ apply_sql "sql/patches_table.sql" "Creating patches table"
 # Settings table
 apply_sql "sql/settings_table.sql" "Creating settings table"
 
+# User preferences table (also safe for re-runs)
+apply_sql "sql/user_preferences_table.sql" "Creating user preferences table"
+
 # Custom fields table
 apply_sql "sql/custom_fields_table.sql" "Creating custom fields table"
 

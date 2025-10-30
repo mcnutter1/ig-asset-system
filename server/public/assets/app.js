@@ -659,26 +659,36 @@ const setupSettingsListeners = () => {
   });
 
   // Custom Fields Management
+  const customFieldModal = getCustomFieldModal();
+  const customFieldForm = getCustomFieldForm();
+
   if (el('#add-custom-field-btn')) {
     el('#add-custom-field-btn').onclick = () => {
-      el('#field-modal-title').textContent = 'Add Custom Field';
-      el('#field-id').value = '';
-      el('#custom-field-form').reset();
-      el('#custom-field-modal').showModal();
+      const modalTitle = customFieldModal?.querySelector('#field-modal-title');
+      const idInput = customFieldForm?.querySelector('#field-id');
+      if (modalTitle) {
+        modalTitle.textContent = 'Add Custom Field';
+      }
+      if (idInput) {
+        idInput.value = '';
+      }
+      customFieldForm?.reset();
+      customFieldModal?.showModal();
     };
   }
 
-  if (el('#custom-field-form')) {
-    el('#custom-field-form').onsubmit = (e) => {
+  if (customFieldForm) {
+    customFieldForm.onsubmit = (e) => {
       e.preventDefault();
       saveCustomField();
     };
   }
 
   // Show/hide select options based on field type
-  if (el('#field-type')) {
-    el('#field-type').onchange = (e) => {
-      const selectOptionsContainer = el('#select-options-container');
+  const fieldTypeInput = customFieldForm?.querySelector('#field-type');
+  if (fieldTypeInput) {
+    fieldTypeInput.onchange = (e) => {
+      const selectOptionsContainer = getCustomFieldElement('#select-options-container');
       if (selectOptionsContainer) {
         selectOptionsContainer.style.display = e.target.value === 'select' ? 'block' : 'none';
       }
@@ -687,6 +697,16 @@ const setupSettingsListeners = () => {
 };
 
 // ============= CUSTOM FIELDS =============
+const getCustomFieldModal = () => el('#custom-field-modal');
+const getCustomFieldForm = () => {
+  const modal = getCustomFieldModal();
+  return modal ? modal.querySelector('#custom-field-form') : null;
+};
+const getCustomFieldElement = (selector) => {
+  const modal = getCustomFieldModal();
+  return modal ? modal.querySelector(selector) : null;
+};
+
 const loadCustomFields = () => {
   api('custom_fields').then(fields => {
     const container = el('#custom-fields-list');
@@ -732,29 +752,52 @@ const loadCustomFields = () => {
 };
 
 const editCustomField = (id) => {
+  const modal = getCustomFieldModal();
+  const form = getCustomFieldForm();
+  if (!modal || !form) return;
+
   api(`custom_field_get&id=${id}`).then(field => {
-    el('#field-modal-title').textContent = 'Edit Custom Field';
-    el('#field-id').value = field.id;
-    el('#field-name').value = field.name;
-    el('#field-label').value = field.label;
-    el('#field-type').value = field.field_type;
-    el('#field-default-value').value = field.default_value || '';
-    el('#field-help-text').value = field.help_text || '';
-    el('#field-required').checked = field.is_required;
-    el('#field-display-order').value = field.display_order;
-    
-    // Handle applies_to_types
-    el('#field-applies-to').value = field.applies_to_types ? field.applies_to_types.join(', ') : '';
-    
-    // Handle select options
-    if (field.field_type === 'select' && field.select_options) {
-      el('#field-select-options').value = field.select_options.join('\n');
-      el('#select-options-container').style.display = 'block';
-    } else {
-      el('#select-options-container').style.display = 'none';
+    const modalTitle = modal.querySelector('#field-modal-title');
+    const idInput = form.querySelector('#field-id');
+    const nameInput = form.querySelector('#field-name');
+    const labelInput = form.querySelector('#field-label');
+    const typeInput = form.querySelector('#field-type');
+    const defaultInput = form.querySelector('#field-default-value');
+    const helpInput = form.querySelector('#field-help-text');
+    const requiredInput = form.querySelector('#field-required');
+    const orderInput = form.querySelector('#field-display-order');
+    const appliesToInput = form.querySelector('#field-applies-to');
+    const selectOptionsInput = form.querySelector('#field-select-options');
+    const selectOptionsContainer = modal.querySelector('#select-options-container');
+
+    if (modalTitle) modalTitle.textContent = 'Edit Custom Field';
+    if (idInput) idInput.value = field.id;
+    if (nameInput) nameInput.value = field.name;
+    if (labelInput) labelInput.value = field.label;
+    if (typeInput) typeInput.value = field.field_type;
+    if (defaultInput) defaultInput.value = field.default_value || '';
+    if (helpInput) helpInput.value = field.help_text || '';
+    if (requiredInput) requiredInput.checked = !!field.is_required;
+    if (orderInput) orderInput.value = field.display_order;
+    if (appliesToInput) {
+      appliesToInput.value = field.applies_to_types ? field.applies_to_types.join(', ') : '';
     }
-    
-    el('#custom-field-modal').showModal();
+
+    if (selectOptionsContainer) {
+      if (field.field_type === 'select' && field.select_options) {
+        if (selectOptionsInput) {
+          selectOptionsInput.value = field.select_options.join('\n');
+        }
+        selectOptionsContainer.style.display = 'block';
+      } else {
+        if (selectOptionsInput) {
+          selectOptionsInput.value = '';
+        }
+        selectOptionsContainer.style.display = 'none';
+      }
+    }
+
+    modal.showModal();
   }).catch(err => {
     console.error('Failed to load field:', err);
     alert('Failed to load field');
@@ -773,24 +816,38 @@ const deleteCustomField = (id, label) => {
 };
 
 const saveCustomField = () => {
-  const id = el('#field-id').value;
+  const form = getCustomFieldForm();
+  if (!form) return;
+
+  const idInput = form.querySelector('#field-id');
+  const nameInput = form.querySelector('#field-name');
+  const labelInput = form.querySelector('#field-label');
+  const typeInput = form.querySelector('#field-type');
+  const requiredInput = form.querySelector('#field-required');
+  const defaultInput = form.querySelector('#field-default-value');
+  const helpInput = form.querySelector('#field-help-text');
+  const orderInput = form.querySelector('#field-display-order');
+  const appliesToInput = form.querySelector('#field-applies-to');
+  const selectOptionsInput = form.querySelector('#field-select-options');
+
+  const id = idInput ? idInput.value : '';
   const data = {
-    name: el('#field-name').value,
-    label: el('#field-label').value,
-    field_type: el('#field-type').value,
-    is_required: el('#field-required').checked,
-    default_value: el('#field-default-value').value || null,
-    help_text: el('#field-help-text').value || null,
-    display_order: parseInt(el('#field-display-order').value) || 0
+    name: nameInput ? nameInput.value : '',
+    label: labelInput ? labelInput.value : '',
+    field_type: typeInput ? typeInput.value : 'text',
+    is_required: requiredInput ? requiredInput.checked : false,
+    default_value: defaultInput && defaultInput.value !== '' ? defaultInput.value : null,
+    help_text: helpInput && helpInput.value !== '' ? helpInput.value : null,
+    display_order: orderInput ? (parseInt(orderInput.value, 10) || 0) : 0
   };
   
   // Handle applies_to_types
-  const appliesTo = el('#field-applies-to').value.trim();
+  const appliesTo = appliesToInput ? appliesToInput.value.trim() : '';
   data.applies_to_types = appliesTo ? appliesTo.split(',').map(t => t.trim()).filter(t => t) : null;
   
   // Handle select options
   if (data.field_type === 'select') {
-    const options = el('#field-select-options').value.trim();
+    const options = selectOptionsInput ? selectOptionsInput.value.trim() : '';
     data.select_options = options ? options.split('\n').map(o => o.trim()).filter(o => o) : [];
   } else {
     data.select_options = null;
@@ -800,7 +857,7 @@ const saveCustomField = () => {
   if (id) data.id = id;
   
   api(action, 'POST', data).then(() => {
-    el('#custom-field-modal').close();
+    getCustomFieldModal()?.close();
     loadCustomFields();
   }).catch(err => {
     console.error('Failed to save field:', err);

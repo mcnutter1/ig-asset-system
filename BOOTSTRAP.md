@@ -26,6 +26,7 @@ That's it! The script will:
 - Applies core schema from `sql/schema.sql`
 - Creates patches tracking table from `sql/patches_table.sql`
 - Sets up settings table from `sql/settings_table.sql`
+- Creates user preferences table from `sql/user_preferences_table.sql`
 - Creates admin user from `sql/admin_user.sql`
 
 ### 2. **System Configuration**
@@ -53,6 +54,7 @@ The application automatically detects if bootstrap has been run:
 │   ├── schema.sql           # Core database schema
 │   ├── patches_table.sql    # Patch tracking table
 │   ├── settings_table.sql   # Application settings
+│   ├── user_preferences_table.sql # Per-user UI preferences
 │   └── admin_user.sql       # Default admin user
 └── server/config/
     └── config.php           # Database configuration
@@ -118,6 +120,16 @@ The bootstrap script is **idempotent** - safe to run multiple times. It uses SQL
 If you need to reset everything:
 1. Drop the database
 2. Run bootstrap again
+
+## Applying Schema Updates to Existing Deployments
+
+When a new SQL file is added (for example `sql/user_preferences_table.sql`), you can either rerun `./bootstrap.sh` or apply the file directly against your production database:
+
+```bash
+mysql -h <db_host> -P <db_port> -u <db_user> -p<db_pass> <db_name> < sql/user_preferences_table.sql
+```
+
+This command is safe to run multiple times thanks to `CREATE TABLE IF NOT EXISTS`.
 
 ## Next Steps After Bootstrap
 
