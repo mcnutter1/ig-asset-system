@@ -2,35 +2,197 @@
 require_once __DIR__ . '/db.php';
 
 class PollerController {
-  
+
+  private static function defaultSanitizationRules() {
+    return [
+      'version' => 1,
+      'meta' => [
+        'description' => 'Default poller sanitization rules',
+      ],
+      'rules' => [
+        'ip_addresses' => [
+          'exclude' => [
+            'cidr' => ['127.0.0.0/8', '::1/128', 'fe80::/10'],
+            'exact' => [],
+            'prefix' => [],
+            'suffix' => []
+          ]
+        ]
+      ]
+    ];
+  }
+
+  private static function normalizeSanitizationRules($rules) {
+    $defaults = self::defaultSanitizationRules();
+    if (!is_array($rules)) {
+      return $defaults;
+    }
+
+    $normalized = array_replace_recursive($defaults, $rules);
+
+    $buckets = ['cidr', 'exact', 'prefix', 'suffix'];
+    foreach ($buckets as $bucket) {
+      $items = $normalized['rules']['ip_addresses']['exclude'][$bucket] ?? [];
+      if (!is_array($items)) {
+        $items = [$items];
+      }
+      $items = array_values(array_unique(array_filter(array_map(function ($value) {
+        return trim((string)$value);
+      }, $items), function ($value) {
+        return $value !== '';
+      })));
+      $normalized['rules']['ip_addresses']['exclude'][$bucket] = $items;
+    }
+
+    if (!isset($normalized['version']) || !is_numeric($normalized['version'])) {
+      $normalized['version'] = $defaults['version'];
+    }
+
+    if (!isset($normalized['meta']) || !is_array($normalized['meta'])) {
+      $normalized['meta'] = $defaults['meta'];
+    }
+
+    return $normalized;
+  }
+
+  private static function loadSanitizationRulesFromDb() {
+    $defaults = self::defaultSanitizationRules();
+    $prettyDefaults = json_encode($defaults, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("SELECT value, updated_at FROM settings WHERE category = 'poller' AND name = 'sanitization_rules' LIMIT 1");
+      $stmt->execute();
+      $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($row && isset($row['value'])) {
+        $raw = trim((string)$row['value']);
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+          $decoded = $defaults;
+        } else {
+          $decoded = self::normalizeSanitizationRules($decoded);
+        }
+        $normalizedRaw = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return [
+          'rules' => $decoded,
+          'raw' => $normalizedRaw,
+          'updated_at' => $row['updated_at'] ?? null
+        ];
+      }
+    } catch (Exception $e) {
+      return [
+        'rules' => $defaults,
+        'raw' => $prettyDefaults,
+        'updated_at' => null,
+        'error' => $e->getMessage()
+      ];
+    }
+
+    return [
+      'rules' => $defaults,
+      'raw' => $prettyDefaults,
+      'updated_at' => null
+    ];
+  }
+
+  public static function getSanitizationRules() {
+    $loaded = self::loadSanitizationRulesFromDb();
+    $response = [
+      'success' => empty($loaded['error']),
+      'rules' => $loaded['rules'],
+      'raw' => $loaded['raw'],
+      'updated_at' => $loaded['updated_at']
+    ];
+
+    if (!empty($loaded['error'])) {
+      $response['message'] = $loaded['error'];
+    }
+
+    return $response;
+  }
+
+  public static function saveSanitizationRules($payload) {
+    $raw = '';
+
+    if (is_string($payload)) {
+      $raw = $payload;
+    } elseif (is_array($payload)) {
+      if (isset($payload['raw'])) {
+        $raw = (string)$payload['raw'];
+      } elseif (isset($payload['rules'])) {
+        $raw = json_encode($payload['rules']);
+      }
+    }
+
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+      return ['success' => false, 'message' => 'Rules JSON cannot be empty'];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+      return ['success' => false, 'message' => 'Rules must be valid JSON'];
+    }
+
+    $normalized = self::normalizeSanitizationRules($decoded);
+    $stored = json_encode($normalized, JSON_UNESCAPED_SLASHES);
+    $pretty = json_encode($normalized, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("INSERT INTO settings (category, name, value, description) VALUES ('poller', 'sanitization_rules', ?, 'Poller sanitization rules') ON DUPLICATE KEY UPDATE value = VALUES(value), description = VALUES(description), updated_at = CURRENT_TIMESTAMP");
+      $stmt->execute([$stored]);
+
+      return [
+        'success' => true,
+        'rules' => $normalized,
+        'raw' => $pretty
+      ];
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => $e->getMessage()];
+    }
+  }
+
+  public static function getSanitizationRulesForAgent() {
+    $loaded = self::loadSanitizationRulesFromDb();
+    return [
+      'success' => empty($loaded['error']),
+      'rules' => $loaded['rules'],
+      'raw' => $loaded['raw'],
+      'checksum' => sha1($loaded['raw']),
+      'updated_at' => $loaded['updated_at']
+    ];
+  }
+
   public static function getStatus() {
     try {
       $pdo = DB::conn();
-      
+
       // Check if poller is currently running (simple approach using settings)
       $stmt = $pdo->prepare("SELECT value FROM settings WHERE category = 'poller' AND name = 'status'");
       $stmt->execute();
       $result = $stmt->fetch();
-      
+
       $status = $result ? $result['value'] : 'stopped';
-      
+
       // Get last run time
       $stmt = $pdo->prepare("SELECT value FROM settings WHERE category = 'poller' AND name = 'last_run'");
       $stmt->execute();
       $lastRun = $stmt->fetch();
-      
+
       // Get polling targets count from assets table
       $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM assets WHERE poll_enabled = TRUE");
       $stmt->execute();
       $countResult = $stmt->fetch();
       $targetsCount = $countResult ? intval($countResult['count']) : 0;
-      
+
       return [
         'status' => $status,
         'last_run' => $lastRun ? $lastRun['value'] : null,
         'targets_count' => $targetsCount
       ];
-      
+
     } catch (Exception $e) {
       return ['status' => 'error', 'message' => $e->getMessage(), 'targets_count' => 0];
     }

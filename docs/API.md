@@ -36,5 +36,14 @@ Base: `/api.php?action=...`
   ```
 - `GET action=agent_download_linux&token=...` — token-injected Python script
 
+## Poller
+- `GET action=poller_sanitization_get`
+  - Admin session: returns latest sanitization rules JSON and metadata.
+  - Agent request: include `token=<agent-token>` query parameter or `X-Agent-Token` header to fetch rules; response includes a `checksum` for caching.
+- `POST action=poller_sanitization_save` (admin)
+  - Body: `{ "raw": "{ ...json... }" }` or `{ "rules": { ...object... } }`
+  - Normalizes and persists sanitization rules used by poller agents to filter sensitive data (loopback, link-local ranges, etc.).
+- Existing poller configuration endpoints remain available: `poller_config`, `poller_config_update`, `pollers_list`, `poller_settings_save`, `poller_settings_delete`, `poller_start`, `poller_stop`, `poller_logs`.
+
 ## Change Log
 Part of `asset_get` response.

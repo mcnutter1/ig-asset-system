@@ -4,6 +4,7 @@
 - **PHP API** performs CRUD, history logging, LDAP auth, and agent/poller ingestion.
 - **Agents** (Linux/Python and Windows/C#) push updates on an interval (default 60s).
 - **Poller** augments via SSH/WMI (upsert by MAC/name) and can mark online/offline.
+- **Sanitization rules** provide admin-managed JSON filters that pollers download to strip loopback/link-local or other sensitive data before reporting it to the API.
 - **Frontend** is a lightweight SPA (no heavy framework) for speed and portability.
 
 ## Online/Heartbeat

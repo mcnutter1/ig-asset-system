@@ -354,6 +354,24 @@
               <small style="align-self: center; color: var(--muted-color);">The <strong>default</strong> profile cannot be removed.</small>
             </div>
 
+            <h4 style="margin-top: 30px;">Sanitization Rules</h4>
+            <p style="color: var(--muted-color);">
+              Define JSON rules that remove sensitive data (e.g., loopback or link-local addresses) before poller results are sent back to the server.
+              The poller downloads this file during configuration reloads; changes take effect on the next poller refresh.
+            </p>
+            <div id="poller-sanitization-status" class="alert"></div>
+            <div class="sanitization-editor">
+              <textarea id="sanitization-rules-editor" spellcheck="false" aria-label="Sanitization rules JSON"></textarea>
+            </div>
+            <div class="sanitization-actions">
+              <div class="sanitization-actions-buttons">
+                <button type="button" id="format-sanitization-rules" class="secondary">Format JSON</button>
+                <button type="button" id="reset-sanitization-rules" class="secondary">Reset to Defaults</button>
+                <button type="button" id="save-sanitization-rules">Save Rules</button>
+              </div>
+              <span id="sanitization-updated-at" class="sanitization-updated"></span>
+            </div>
+
             <h4 style="margin-top: 30px;">Polling Control</h4>
             <div style="display: flex; gap: 10px;">
               <button type="button" id="start-polling-settings" class="success">▶ Start Polling</button>

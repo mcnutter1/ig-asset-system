@@ -8,6 +8,29 @@ class AgentController {
     return bin2hex(random_bytes(24));
   }
 
+  public static function getAgentByToken($token, $updateLastSeen = false) {
+    $trimmed = trim((string)$token);
+    if ($trimmed === '') {
+      return null;
+    }
+
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("SELECT * FROM agents WHERE token = ? AND status = 'active'");
+      $stmt->execute([$trimmed]);
+      $agent = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if ($agent && $updateLastSeen) {
+        $update = $pdo->prepare("UPDATE agents SET last_seen = NOW() WHERE id = ?");
+        $update->execute([$agent['id']]);
+      }
+
+      return $agent ?: null;
+    } catch (Exception $e) {
+      return null;
+    }
+  }
+
   public static function register($name, $platform, $bind_asset=null) {
     $pdo = DB::conn();
     $tok = self::token();

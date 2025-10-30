@@ -92,6 +92,7 @@ apply_sql "sql/custom_fields_table.sql" "Creating custom fields table"
 
 # Poller enhancements (polling address, DNS config)
 apply_sql "sql/patches/20251030_add_poll_address.sql" "Applying poller address patch"
+apply_sql "sql/patches/20251030_add_sanitization_rules_setting.sql" "Seeding poller sanitization rules"
 
 # Admin user
 apply_sql "sql/admin_user.sql" "Creating admin user"

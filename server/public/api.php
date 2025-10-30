@@ -215,6 +215,28 @@ switch ($action) {
     echo json_encode(PollerController::deletePoller($name));
     break;
 
+  case 'poller_sanitization_get':
+    $token = $_SERVER['HTTP_X_AGENT_TOKEN'] ?? ($_GET['token'] ?? '');
+    if ($token) {
+      $agent = AgentController::getAgentByToken($token, true);
+      if (!$agent) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'invalid_agent_token']);
+        break;
+      }
+      echo json_encode(PollerController::getSanitizationRulesForAgent());
+    } else {
+      require_login(); require_role('admin');
+      echo json_encode(PollerController::getSanitizationRules());
+    }
+    break;
+
+  case 'poller_sanitization_save':
+    require_login(); require_role('admin');
+    $in = json_input();
+    echo json_encode(PollerController::saveSanitizationRules($in));
+    break;
+
   case 'poller_logs':
     require_login();
     $since = $_GET['since'] ?? null;

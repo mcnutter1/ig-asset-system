@@ -12,11 +12,16 @@ CREATE TABLE IF NOT EXISTS settings (
 
 INSERT INTO settings (category, name, value, description) VALUES
   ('ldap', 'enabled', 'false', 'Enable LDAP authentication'),
-  ('pollers', 'default', '{"dns_servers":[]}', 'Default poller instance settings')
   ('ldap', 'port', '389', 'LDAP server port'),
   ('ldap', 'bind_dn', 'CN=ldap-reader,OU=Service Accounts,DC=example,DC=com', 'LDAP bind DN for authentication'),
   ('ldap', 'bind_password', '', 'LDAP bind password'),
   ('ldap', 'base_dn', 'DC=example,DC=com', 'LDAP base DN for user searches'),
   ('ldap', 'user_attr', 'sAMAccountName', 'LDAP user attribute for login'),
-  ('pollers', 'default', '{"dns_servers":[]}', 'Default poller instance settings')
-  ON DUPLICATE KEY UPDATE description = VALUES(description);
+  ('pollers', 'default', '{"dns_servers":[]}', 'Default poller instance settings'),
+  (
+    'poller',
+    'sanitization_rules',
+    '{"version":1,"meta":{"description":"Default poller sanitization rules"},"rules":{"ip_addresses":{"exclude":{"cidr":["127.0.0.0/8","::1/128","fe80::/10"],"exact":[],"prefix":[],"suffix":[]}}}}',
+    'Poller sanitization rules JSON'
+  )
+ON DUPLICATE KEY UPDATE description = VALUES(description);

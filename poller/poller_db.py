@@ -16,6 +16,8 @@ import sys
 import os
 import re
 import ipaddress
+import copy
+import hashlib
 try:
     import dns.resolver as dns_resolver
 except ImportError:  # pragma: no cover - optional dependency
@@ -485,18 +487,221 @@ def collect_unix_resource_metrics(ssh, os_family):
 def current_timestamp():
     return datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
+
+DEFAULT_SANITIZATION_RULES = {
+    "version": 1,
+    "meta": {
+        "description": "Default poller sanitization rules"
+    },
+    "rules": {
+        "ip_addresses": {
+            "exclude": {
+                "cidr": ["127.0.0.0/8", "::1/128", "fe80::/10"],
+                "exact": [],
+                "prefix": [],
+                "suffix": []
+            }
+        }
+    }
+}
+
+
+class SanitizationManager:
+    def __init__(self, path):
+        self.path = path
+        self.rules = copy.deepcopy(DEFAULT_SANITIZATION_RULES)
+        self.exclude_cidrs = []
+        self.exclude_exact = set()
+        self.exclude_prefix = []
+        self.exclude_suffix = []
+        self.load()
+
+    def current_checksum(self):
+        if not self.path or not os.path.exists(self.path):
+            return ''
+        try:
+            with open(self.path, 'rb') as handle:
+                return hashlib.sha1(handle.read()).hexdigest()
+        except Exception:
+            return ''
+
+    def write_raw(self, raw):
+        if not self.path:
+            return False
+        directory = os.path.dirname(self.path)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        with open(self.path, 'w', encoding='utf-8') as handle:
+            if raw.endswith('\n'):
+                handle.write(raw)
+            else:
+                handle.write(raw + '\n')
+        return True
+
+    def _merge_dicts(self, base, override):
+        if not isinstance(base, dict) or not isinstance(override, dict):
+            return base
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(base.get(key), dict):
+                base[key] = self._merge_dicts(base.get(key, {}), value)
+            else:
+                base[key] = value
+        return base
+
+    def _normalize_rules(self, rules):
+        normalized = copy.deepcopy(DEFAULT_SANITIZATION_RULES)
+        if isinstance(rules, dict):
+            normalized = self._merge_dicts(normalized, rules)
+
+        exclude = normalized.get('rules', {}).get('ip_addresses', {}).get('exclude', {})
+        for key in ('cidr', 'exact', 'prefix', 'suffix'):
+            values = exclude.get(key, [])
+            if not isinstance(values, list):
+                values = [values]
+            cleaned = []
+            seen = set()
+            for value in values:
+                text = str(value).strip()
+                if not text:
+                    continue
+                marker = text.lower()
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                cleaned.append(text)
+            exclude[key] = cleaned
+        normalized['rules']['ip_addresses']['exclude'] = exclude
+        if not isinstance(normalized.get('meta'), dict):
+            normalized['meta'] = copy.deepcopy(DEFAULT_SANITIZATION_RULES['meta'])
+        if not isinstance(normalized.get('version'), (int, float)):
+            normalized['version'] = DEFAULT_SANITIZATION_RULES['version']
+        return normalized
+
+    def _rebuild_indexes(self):
+        exclude = self.rules.get('rules', {}).get('ip_addresses', {}).get('exclude', {})
+        self.exclude_cidrs = []
+        for value in exclude.get('cidr', []) or []:
+            try:
+                network = ipaddress.ip_network(str(value).strip(), strict=False)
+                self.exclude_cidrs.append(network)
+            except (ValueError, TypeError):
+                continue
+        self.exclude_exact = set(str(value).strip().lower() for value in (exclude.get('exact', []) or []))
+        self.exclude_prefix = [str(value).strip().lower() for value in (exclude.get('prefix', []) or []) if str(value).strip()]
+        self.exclude_suffix = [str(value).strip().lower() for value in (exclude.get('suffix', []) or []) if str(value).strip()]
+
+    def load(self):
+        data = None
+        path_exists = bool(self.path and os.path.exists(self.path))
+        if path_exists:
+            try:
+                with open(self.path, 'r', encoding='utf-8') as handle:
+                    data = json.load(handle)
+            except Exception:
+                data = None
+
+        self.rules = self._normalize_rules(data or {})
+        self._rebuild_indexes()
+
+        if not path_exists and self.path:
+            try:
+                pretty = json.dumps(self.rules, indent=2)
+                self.write_raw(pretty)
+            except Exception:
+                pass
+
+        return self.rules
+
+    def should_exclude(self, value):
+        literal = normalize_ip_literal(value)
+        if not literal:
+            return False
+        lowered = literal.lower()
+        if lowered in self.exclude_exact:
+            return True
+        for prefix in self.exclude_prefix:
+            if lowered.startswith(prefix):
+                return True
+        for suffix in self.exclude_suffix:
+            if lowered.endswith(suffix):
+                return True
+        try:
+            ip_obj = ipaddress.ip_address(literal)
+        except ValueError:
+            return False
+        for network in self.exclude_cidrs:
+            if ip_obj in network:
+                return True
+        return False
+
+    def filter_summary_ips(self, addresses):
+        if not isinstance(addresses, list):
+            return []
+        filtered = []
+        seen = set()
+        for value in addresses:
+            literal = normalize_ip_literal(value)
+            if not literal or self.should_exclude(literal):
+                continue
+            marker = literal.lower()
+            if marker in seen:
+                continue
+            seen.add(marker)
+            filtered.append(literal)
+        return filtered
+
+    def filter_interface_addresses(self, addresses):
+        if not isinstance(addresses, list):
+            return []
+        filtered = []
+        seen = set()
+        for value in addresses:
+            literal = normalize_ip_literal(value)
+            if not literal or self.should_exclude(literal):
+                continue
+            marker = literal.lower()
+            if marker in seen:
+                continue
+            seen.add(marker)
+            filtered.append(value)
+        return filtered
+
+    def sanitize_interfaces(self, interfaces):
+        if not isinstance(interfaces, list):
+            return interfaces
+        sanitized = []
+        for iface in interfaces:
+            if isinstance(iface, dict):
+                updated = dict(iface)
+                updated['addresses'] = self.filter_interface_addresses(iface.get('addresses', []))
+                sanitized.append(updated)
+            else:
+                sanitized.append(iface)
+        return sanitized
+
+    def sanitize_network_info(self, info):
+        if not isinstance(info, dict):
+            return info or {}
+        sanitized = dict(info)
+        sanitized['addresses'] = self.filter_summary_ips(info.get('addresses', []))
+        sanitized['interfaces'] = self.sanitize_interfaces(info.get('interfaces', []))
+        return sanitized
+
 class DatabasePoller:
     def __init__(self):
         self.poller_name = os.getenv('POLLER_NAME', 'default')
         self._dns_warning_logged = False
         self._dns_error_hosts = set()
         self._dns_cache = {}
+        self.sanitization_rules_path = os.path.join(os.path.dirname(__file__), 'sanitization_rules.json')
+        self.sanitizer = SanitizationManager(self.sanitization_rules_path)
 
         self.config = self.load_config_from_db()
         self.db_config = self.config['database']
         self.api_config = self.config['api']
         self.poller_config = self.config['poller']
         self.poller_dns_servers = self.poller_config.get('dns_servers', [])
+        self.refresh_sanitization_rules(fetch_from_server=True)
     
     def get_setting(self, conn, category, name, default=None):
         """Get a setting from the database"""
@@ -726,6 +931,103 @@ class DatabasePoller:
 
         self._dns_cache[literal] = literal
         return literal
+
+    def download_sanitization_rules(self):
+        if not self.api_config.get('base_url') or not self.api_config.get('api_key'):
+            return False
+
+        timeout = max(2, int(self.poller_config.get('timeout', 10))) if isinstance(self.poller_config, dict) else 10
+
+        try:
+            response = requests.get(
+                self.api_config['base_url'],
+                params={'action': 'poller_sanitization_get', 'token': self.api_config['api_key']},
+                timeout=timeout
+            )
+        except Exception as exc:
+            self.log_to_db('warning', f"Failed to download sanitization rules: {exc}")
+            return False
+
+        if response.status_code != 200:
+            self.log_to_db('warning', f"Failed to download sanitization rules (HTTP {response.status_code})")
+            return False
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            self.log_to_db('warning', f"Invalid sanitization rules response: {exc}")
+            return False
+
+        if payload.get('success') is False:
+            message = payload.get('message') or payload.get('error') or 'Unknown error'
+            self.log_to_db('warning', f"Server rejected sanitization rules request: {message}")
+            return False
+
+        raw = payload.get('raw')
+        if not raw and 'rules' in payload:
+            try:
+                raw = json.dumps(payload['rules'], indent=2)
+            except Exception:
+                raw = ''
+
+        if not raw or not raw.strip():
+            self.log_to_db('warning', "Sanitization rules response did not include data")
+            return False
+
+        if self.sanitizer:
+            existing_checksum = self.sanitizer.current_checksum()
+            remote_checksum = payload.get('checksum')
+            new_checksum = hashlib.sha1(raw.encode('utf-8')).hexdigest()
+            if remote_checksum and existing_checksum == remote_checksum:
+                self.log_to_db('debug', "Sanitization rules already current (checksum match)")
+                return False
+            if not remote_checksum and existing_checksum == new_checksum:
+                self.log_to_db('debug', "Sanitization rules unchanged")
+                return False
+            try:
+                self.sanitizer.write_raw(raw)
+            except Exception as exc:
+                self.log_to_db('warning', f"Failed to persist sanitization rules: {exc}")
+                return False
+
+            self.log_to_db('info', "Sanitization rules updated from server")
+            return True
+
+        return False
+
+    def refresh_sanitization_rules(self, fetch_from_server=False):
+        if self.sanitizer is None:
+            self.sanitizer = SanitizationManager(self.sanitization_rules_path)
+        if fetch_from_server:
+            self.download_sanitization_rules()
+        try:
+            self.sanitizer.load()
+        except Exception as exc:
+            self.log_to_db('warning', f"Failed to load sanitization rules: {exc}")
+
+    def sanitize_ip_list(self, addresses):
+        if not self.sanitizer:
+            return addresses or []
+        return self.sanitizer.filter_summary_ips(addresses or [])
+
+    def sanitize_network_info(self, info):
+        if not self.sanitizer:
+            return info or {}
+        return self.sanitizer.sanitize_network_info(info or {})
+
+    def sanitize_asset_payload(self, asset):
+        if not self.sanitizer or not isinstance(asset, dict):
+            return asset
+        if 'ips' in asset:
+            asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+        attributes = asset.get('attributes')
+        if isinstance(attributes, dict):
+            network = attributes.get('network')
+            if isinstance(network, dict):
+                interfaces = network.get('interfaces')
+                if interfaces is not None:
+                    network['interfaces'] = self.sanitizer.sanitize_interfaces(interfaces)
+        return asset
     
     def should_run(self):
         """Check if poller should be running"""
@@ -908,6 +1210,7 @@ class DatabasePoller:
                 asset['name'] = os_info['hostname']
 
             network_info = collect_unix_network_info(ssh)
+            network_info = self.sanitize_network_info(network_info)
             if network_info.get('interfaces'):
                 asset['attributes']['network'] = {'interfaces': network_info['interfaces']}
             ips = network_info.get('addresses') or []
@@ -936,7 +1239,7 @@ class DatabasePoller:
                 ssh.close()
 
         asset['attributes']['poller']['collected_at'] = current_timestamp()
-        return asset
+        return self.sanitize_asset_payload(asset)
     
     def windows_probe(self, target):
         """Probe Windows system (basic implementation)"""
@@ -955,10 +1258,12 @@ class DatabasePoller:
             "mac": None
         }
         print(f"Basic probe for Windows host: {poll_address or host} (resolved: {host})")
-        return info
+        info['ips'] = self.sanitize_ip_list(info.get('ips') or [])
+        return self.sanitize_asset_payload(info)
     
     def push_update(self, asset, online=True):
         """Push asset update to API"""
+        asset = self.sanitize_asset_payload(asset)
         url = f"{self.api_config['base_url']}?action=agent_push&token={self.api_config['api_key']}"
         
         payload = {
@@ -1034,6 +1339,8 @@ class DatabasePoller:
             else:
                 self.log_to_db('error', f"Unknown poll type: {poll_type}", host)
                 continue
+
+            asset = self.sanitize_asset_payload(asset)
             
             # Check if host is online
             online = self.ping(poll_address or host, resolved_host)
@@ -1054,6 +1361,7 @@ class DatabasePoller:
             self.poller_config = self.config['poller']
             self.api_config = self.config['api']
             self.poller_dns_servers = self.poller_config.get('dns_servers', [])
+            self.refresh_sanitization_rules(fetch_from_server=True)
             self._dns_cache.clear()
             self._dns_error_hosts.clear()
             

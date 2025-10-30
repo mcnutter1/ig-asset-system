@@ -609,6 +609,134 @@ const setupSettingsListeners = () => {
   const pollerList = el('#poller-instances-list');
   const pollerNameInput = el('#new-poller-name');
   const pollerDnsInput = el('#new-poller-dns');
+  const sanitizationEditor = el('#sanitization-rules-editor');
+  const sanitizationUpdatedLabel = el('#sanitization-updated-at');
+  const sanitizationFormatBtn = el('#format-sanitization-rules');
+  const sanitizationResetBtn = el('#reset-sanitization-rules');
+  const sanitizationSaveBtn = el('#save-sanitization-rules');
+  const SANITIZATION_STATUS_ID = 'poller-sanitization-status';
+
+  const defaultSanitizationRules = {
+    version: 1,
+    meta: {
+      description: 'Default poller sanitization rules'
+    },
+    rules: {
+      ip_addresses: {
+        exclude: {
+          cidr: ['127.0.0.0/8', '::1/128', 'fe80::/10'],
+          exact: [],
+          prefix: [],
+          suffix: []
+        }
+      }
+    }
+  };
+
+  const renderSanitizationUpdatedAt = (value) => {
+    if (!sanitizationUpdatedLabel) return;
+    if (!value) {
+      sanitizationUpdatedLabel.textContent = 'Last updated: not saved yet';
+      return;
+    }
+    try {
+      const stamp = new Date(value);
+      if (!Number.isNaN(stamp.getTime())) {
+        sanitizationUpdatedLabel.textContent = `Last updated: ${stamp.toLocaleString()}`;
+        return;
+      }
+    } catch (err) {
+      // ignore
+    }
+    sanitizationUpdatedLabel.textContent = `Last updated: ${value}`;
+  };
+
+  const loadSanitizationRules = (showStatus = true, showSuccess = true) => {
+    if (!sanitizationEditor) return Promise.resolve();
+    if (showStatus) {
+      showAlert(SANITIZATION_STATUS_ID, 'Loading sanitization rules…', 'info');
+    }
+    return api('poller_sanitization_get').then(res => {
+      if (!res || res.success === false) {
+        const message = res?.message || 'Failed to load sanitization rules';
+        showAlert(SANITIZATION_STATUS_ID, message, 'error');
+        return;
+      }
+      const raw = typeof res.raw === 'string' && res.raw.trim() !== ''
+        ? res.raw
+        : JSON.stringify(res.rules || defaultSanitizationRules, null, 2);
+      sanitizationEditor.value = raw;
+      renderSanitizationUpdatedAt(res.updated_at || null);
+      if (showSuccess) {
+        showAlert(SANITIZATION_STATUS_ID, 'Sanitization rules loaded', 'success');
+      } else if (showStatus) {
+        // Clear loading state without overriding existing success/error messages
+        showAlert(SANITIZATION_STATUS_ID, '', 'info');
+      }
+    }).catch(err => {
+      showAlert(SANITIZATION_STATUS_ID, `Failed to load sanitization rules: ${err.message}`, 'error');
+    });
+  };
+
+  if (sanitizationFormatBtn && sanitizationEditor) {
+    sanitizationFormatBtn.onclick = () => {
+      try {
+        const parsed = JSON.parse(sanitizationEditor.value || '{}');
+        sanitizationEditor.value = JSON.stringify(parsed, null, 2);
+        showAlert(SANITIZATION_STATUS_ID, 'Rules formatted for readability', 'info');
+      } catch (err) {
+        showAlert(SANITIZATION_STATUS_ID, `Invalid JSON: ${err.message}`, 'error');
+      }
+    };
+  }
+
+  if (sanitizationResetBtn && sanitizationEditor) {
+    sanitizationResetBtn.onclick = () => {
+      if (!confirm('Reset sanitization rules to the default set? Unsaved changes will be lost.')) {
+        return;
+      }
+      sanitizationEditor.value = JSON.stringify(defaultSanitizationRules, null, 2);
+      renderSanitizationUpdatedAt(null);
+      showAlert(SANITIZATION_STATUS_ID, 'Default rules loaded (remember to save).', 'warning');
+    };
+  }
+
+  if (sanitizationSaveBtn && sanitizationEditor) {
+    sanitizationSaveBtn.onclick = () => {
+      const raw = sanitizationEditor.value.trim();
+      if (!raw) {
+        showAlert(SANITIZATION_STATUS_ID, 'Rules JSON cannot be empty', 'error');
+        return;
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        showAlert(SANITIZATION_STATUS_ID, `Invalid JSON: ${err.message}`, 'error');
+        return;
+      }
+      const pretty = JSON.stringify(parsed, null, 2);
+      sanitizationSaveBtn.disabled = true;
+      showAlert(SANITIZATION_STATUS_ID, 'Saving sanitization rules…', 'info');
+      api('poller_sanitization_save', 'POST', { raw: pretty }).then(res => {
+        if (!res || res.success === false) {
+          const message = res?.message || 'Failed to save sanitization rules';
+          showAlert(SANITIZATION_STATUS_ID, message, 'error');
+          return;
+        }
+        showAlert(SANITIZATION_STATUS_ID, 'Sanitization rules saved', 'success');
+        loadSanitizationRules(false, false);
+      }).catch(err => {
+        showAlert(SANITIZATION_STATUS_ID, `Failed to save sanitization rules: ${err.message}`, 'error');
+      }).finally(() => {
+        sanitizationSaveBtn.disabled = false;
+      });
+    };
+  }
+
+  if (sanitizationEditor) {
+    loadSanitizationRules();
+  }
 
   const clearPollerStatus = () => {
     const statusEl = el('#poller-instances-status');
