@@ -17,6 +17,7 @@ windows:
     winrm_use_ssl: false     # optional, defaults to false
     winrm_transport: ntlm    # optional: ntlm, kerberos, credssp
     applications_limit: 150  # optional cap for installed app inventory
+  collect_applications: true
 api:
   base_url: "http://azre-itassets1.corp.inovagenix.com/api.php"
   api_key: "POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
