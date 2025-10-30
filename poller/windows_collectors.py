@@ -2,6 +2,8 @@ import datetime
 import json
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import requests
+
 try:  # pragma: no cover - optional dependency
     from impacket.dcerpc.v5.dcomrt import DCOMConnection  # type: ignore
     from impacket.dcerpc.v5.dcom import wmi as imp_wmi  # type: ignore
@@ -189,46 +191,64 @@ def _collect_via_winrm(target: Dict[str, Any]) -> Dict[str, Any]:
     if not host:
         raise WindowsProbeError("Missing host for Windows target")
 
-    use_ssl = _bool_with_default(target.get("winrm_use_ssl"), False)
-    port = _int_with_default(target.get("winrm_port"), 5986 if use_ssl else 5985)
     transport_value = target.get("winrm_transport")
     transport = transport_value.strip() if isinstance(transport_value, str) else transport_value
     if not transport:
         transport = "ntlm"
     elif isinstance(transport, str):
         transport = transport.lower()
-    validate_cert = _bool_with_default(target.get("winrm_validate_cert"), False)
-    read_timeout = _int_with_default(target.get("winrm_read_timeout"), 30)
-    operation_timeout = _int_with_default(target.get("winrm_operation_timeout"), 20)
-
-    endpoint = f"http{'s' if use_ssl else ''}://{host}:{port}/wsman"
-    session = winrm.Session(
-        endpoint,
-        auth=(auth["winrm_username"], auth["password"]),
-        transport=transport,
-        server_cert_validation="validate" if validate_cert else "ignore",
-        read_timeout_sec=read_timeout,
-        operation_timeout_sec=operation_timeout,
-    )
-
     collect_apps = _bool_with_default(target.get("collect_applications"), True)
     app_limit = _int_with_default(target.get("applications_limit"), 200)
     if not collect_apps or app_limit <= 0:
         app_limit = 0
     script = _WINRM_COLLECTION_SCRIPT_TEMPLATE.replace("__APP_LIMIT__", str(app_limit))
-    result = session.run_ps(script)
+    validate_cert = _bool_with_default(target.get("winrm_validate_cert"), False)
+    read_timeout = _int_with_default(target.get("winrm_read_timeout"), 30)
+    operation_timeout = _int_with_default(target.get("winrm_operation_timeout"), 20)
 
-    if result.status_code != 0:
-        stderr = (result.std_err or b"").decode("utf-8", "ignore").strip()
-        raise WindowsProbeError(stderr or f"WinRM returned status {result.status_code}")
+    candidate_errors: List[str] = []
+    last_exception: Optional[Exception] = None
 
-    stdout = (result.std_out or b"").decode("utf-8", "ignore").strip()
-    if not stdout:
-        raise WindowsProbeError("WinRM returned no data")
+    for use_ssl, port in _winrm_candidate_configs(target):
+        endpoint = f"http{'s' if use_ssl else ''}://{host}:{port}/wsman"
+        session = winrm.Session(
+            endpoint,
+            auth=(auth["winrm_username"], auth["password"]),
+            transport=transport,
+            server_cert_validation="validate" if validate_cert else "ignore",
+            read_timeout_sec=read_timeout,
+            operation_timeout_sec=operation_timeout,
+        )
 
-    payload = json.loads(stdout)
+        try:
+            result = session.run_ps(script)
+        except requests.exceptions.ConnectionError as exc:
+            candidate_errors.append(f"{endpoint} connection error: {exc}")
+            continue
+        except Exception as exc:  # pragma: no cover - network dependent
+            last_exception = exc
+            break
 
-    return _normalize_windows_payload_from_json(target, payload)
+        if result.status_code != 0:
+            stderr = (result.std_err or b"").decode("utf-8", "ignore").strip()
+            last_exception = WindowsProbeError(stderr or f"WinRM returned status {result.status_code}")
+            break
+
+        stdout = (result.std_out or b"").decode("utf-8", "ignore").strip()
+        if not stdout:
+            last_exception = WindowsProbeError("WinRM returned no data")
+            break
+
+        payload = json.loads(stdout)
+        return _normalize_windows_payload_from_json(target, payload)
+
+    if last_exception:
+        if isinstance(last_exception, WindowsProbeError):
+            raise last_exception
+        raise WindowsProbeError(str(last_exception))
+    if candidate_errors:
+        raise WindowsProbeError("; ".join(candidate_errors))
+    raise WindowsProbeError("Unable to collect Windows data via WinRM")
 
 
 def _normalize_windows_payload(
@@ -677,6 +697,22 @@ def _as_list(value: Any) -> List[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _winrm_candidate_configs(target: Dict[str, Any]) -> List[Tuple[bool, int]]:
+    explicit_port = _to_int(target.get("winrm_port"))
+    explicit_ssl = target.get("winrm_use_ssl")
+
+    if explicit_port is not None:
+        use_ssl = _bool_with_default(explicit_ssl, False)
+        return [(use_ssl, explicit_port)]
+
+    if explicit_ssl is not None and str(explicit_ssl).strip() != "":
+        use_ssl = _bool_with_default(explicit_ssl, False)
+        default_port = 5986 if use_ssl else 5985
+        return [(use_ssl, default_port)]
+
+    return [(False, 5985), (True, 5986)]
 
 
 def _int_with_default(value: Any, default: int) -> int:
