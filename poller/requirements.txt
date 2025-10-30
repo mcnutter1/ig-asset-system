@@ -1,5 +1,8 @@
 paramiko
 pyyaml
 requests
+pywinrm
+requests-ntlm
+impacket
 mysql-connector-python
 dnspython

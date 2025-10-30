@@ -7,6 +7,8 @@ import paramiko
 import requests
 import yaml
 
+from windows_collectors import collect_windows_asset, WindowsProbeError
+
 
 DEFAULT_INTERVAL = 120
 
@@ -519,7 +521,54 @@ def windows_probe(target):
     }
     if target.get('asset_id'):
         asset['id'] = target['asset_id']
-    asset['attributes'].setdefault('poller', {})['collected_at'] = current_timestamp()
+    poller_meta = asset['attributes'].setdefault('poller', {})
+
+    try:
+        windows_data = collect_windows_asset(target)
+
+        os_info = windows_data.get('os') or {}
+        if os_info:
+            asset['attributes']['os'] = os_info
+        asset['attributes']['os'].setdefault('family', 'windows')
+        resolved_name = windows_data.get('name')
+        if resolved_name:
+            asset['name'] = resolved_name
+            asset['attributes']['os']['hostname'] = resolved_name
+
+        ips = windows_data.get('ips') or []
+        if ips:
+            asset['ips'] = ips
+
+        mac = windows_data.get('mac')
+        if mac:
+            asset['mac'] = mac
+
+        hardware = windows_data.get('hardware')
+        if hardware:
+            asset['attributes']['hardware'] = hardware
+
+        network = windows_data.get('network')
+        if network:
+            asset['attributes']['network'] = network
+
+        metrics = windows_data.get('metrics')
+        if metrics:
+            asset['attributes']['metrics'] = metrics
+
+        applications = windows_data.get('applications')
+        if applications:
+            asset['attributes']['apps'] = applications
+
+        poller_meta['source'] = windows_data.get('probe_source')
+        if windows_data.get('warnings'):
+            poller_meta['warnings'] = windows_data['warnings']
+
+    except WindowsProbeError as exc:
+        poller_meta['error'] = str(exc)
+    except Exception as exc:  # pragma: no cover - runtime safety
+        poller_meta['error'] = f"Windows probe failure: {exc}"
+
+    poller_meta['collected_at'] = current_timestamp()
     return asset
 
 
