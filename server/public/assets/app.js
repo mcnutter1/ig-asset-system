@@ -68,6 +68,19 @@ const defaultAssetColumns = ['name','type','ips','mac','owner','status','last_se
 const allAssetColumnKeys = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
 const assetColumnOrder = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
 
+const defaultAssetTypes = [
+  'server',
+  'workstation',
+  'network-device',
+  'printer',
+  'mobile',
+  'iot',
+  'virtual-machine',
+  'storage',
+  'appliance',
+  'other'
+];
+
 const assetColumnDefinitions = {
   name: {
     label: 'Name',
@@ -122,6 +135,33 @@ let activeAssetColumns = [...defaultAssetColumns];
 let columnPrefsLoaded = false;
 let lastRenderedAssets = [];
 let lastAssetRenderContext = { emptyReason: 'none', total: 0 };
+
+function formatAssetTypeLabel(type) {
+  if (!type) return '';
+  return type
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function populateAssetTypeSelect(selectedValue = '') {
+  const select = el('#asset-type');
+  if (!select) return;
+  const normalized = typeof selectedValue === 'string' ? selectedValue.trim() : '';
+  const options = [...defaultAssetTypes];
+  if (normalized && !options.includes(normalized)) {
+    options.push(normalized);
+  }
+  const placeholder = '<option value="">Select asset type...</option>';
+  select.innerHTML = placeholder + options
+    .map(type => `<option value="${escapeHtml(type)}">${escapeHtml(formatAssetTypeLabel(type))}</option>`)
+    .join('');
+  if (normalized) {
+    select.value = normalized;
+  } else {
+    select.value = '';
+  }
+}
 
 function sanitizeColumns(columns) {
   if (!Array.isArray(columns)) {
@@ -1117,6 +1157,7 @@ const editAsset = (id) => {
       
       el('#asset-id').value = a.id;
       el('#asset-name').value = a.name || '';
+  populateAssetTypeSelect(a.type || '');
       el('#asset-type').value = a.type || '';
       el('#asset-mac').value = a.mac || '';
       el('#asset-ips').value = (a.ips || []).map(x => x.ip).join(', ');
@@ -1172,6 +1213,7 @@ window.deleteAsset = deleteAsset;
 
 // ============= EVENT HANDLER INITIALIZATION =============
 const setupAllHandlers = () => {
+  populateAssetTypeSelect();
   // Asset management handlers
   el('#refresh').onclick = loadAssets;
 
@@ -1215,6 +1257,7 @@ const setupAllHandlers = () => {
   el('#new-asset').onclick = () => {
     el('#asset-id').value = '';
     el('#asset-name').value = '';
+    populateAssetTypeSelect();
     el('#asset-type').value = '';
     el('#asset-mac').value = '';
     el('#asset-ips').value = '';
