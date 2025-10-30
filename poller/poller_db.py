@@ -15,6 +15,7 @@ import mysql.connector
 import sys
 import os
 import re
+import ipaddress
 from datetime import datetime
 from config_loader import load_php_config
 
@@ -72,7 +73,8 @@ def parse_ifconfig(raw):
             if stripped.startswith('inet ') or stripped.startswith('inet6 '):
                 parts = stripped.split()
                 if len(parts) >= 2:
-                    current['addresses'].append(parts[1])
+                    if not is_loopback_address(parts[1]):
+                        current['addresses'].append(parts[1])
             else:
                 match = mac_pattern.search(stripped)
                 if match:
@@ -128,6 +130,24 @@ def parse_uptime_load(raw):
         }
     except (TypeError, ValueError):
         return None
+
+
+def normalize_ip_literal(value):
+    if not value:
+        return ''
+    base = str(value).split('%')[0]
+    base = base.split('/')[0]
+    return base.strip()
+
+
+def is_loopback_address(value):
+    literal = normalize_ip_literal(value)
+    if not literal:
+        return False
+    try:
+        return ipaddress.ip_address(literal).is_loopback
+    except ValueError:
+        return False
 
 
 def run_ssh_command(ssh, command, timeout=10):
@@ -247,10 +267,13 @@ def collect_unix_network_info(ssh):
                 if not local:
                     continue
                 prefix = addr.get('prefixlen')
+                if is_loopback_address(local):
+                    continue
                 formatted = f"{local}/{prefix}" if prefix is not None else local
                 addresses.append(formatted)
-                if local not in ip_addresses:
-                    ip_addresses.append(local)
+                normalized_local = normalize_ip_literal(local)
+                if normalized_local and normalized_local not in ip_addresses:
+                    ip_addresses.append(normalized_local)
             entry = {
                 'name': name,
                 'addresses': addresses,
@@ -269,8 +292,8 @@ def collect_unix_network_info(ssh):
             interfaces = parse_ifconfig(ifconfig_raw)
             for iface in interfaces:
                 for addr in iface.get('addresses', []):
-                    ip = addr.split('%')[0].split('/')[0]
-                    if ip and ip not in ip_addresses:
+                    ip = normalize_ip_literal(addr)
+                    if ip and not is_loopback_address(ip) and ip not in ip_addresses:
                         ip_addresses.append(ip)
                 mac = iface.get('mac')
                 if mac and not primary_mac and not iface['name'].startswith(('lo', 'lo0')):
@@ -281,8 +304,8 @@ def collect_unix_network_info(ssh):
             interfaces = parse_ifconfig(ifconfig_raw)
             for iface in interfaces:
                 for addr in iface.get('addresses', []):
-                    ip = addr.split('%')[0].split('/')[0]
-                    if ip and ip not in ip_addresses:
+                    ip = normalize_ip_literal(addr)
+                    if ip and not is_loopback_address(ip) and ip not in ip_addresses:
                         ip_addresses.append(ip)
                 mac = iface.get('mac')
                 if mac and not primary_mac and not iface['name'].startswith(('lo', 'lo0')):
@@ -291,8 +314,8 @@ def collect_unix_network_info(ssh):
     if not ip_addresses:
         for iface in interfaces:
             for addr in iface.get('addresses', []):
-                ip = addr.split('%')[0].split('/')[0]
-                if ip and ip not in ip_addresses:
+                ip = normalize_ip_literal(addr)
+                if ip and not is_loopback_address(ip) and ip not in ip_addresses:
                     ip_addresses.append(ip)
 
     return {

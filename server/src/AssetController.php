@@ -40,41 +40,105 @@ class AssetController {
   }
 
   public static function get($id) {
-    $pdo = DB::conn();
-    $stmt = $pdo->prepare("
-      SELECT a.*, u.display_name as owner_name, u.email as owner_email 
-      FROM assets a 
-      LEFT JOIN users u ON a.owner_user_id = u.id 
-      WHERE a.id=?
-    ");
-    $stmt->execute([$id]);
-    $asset = $stmt->fetch();
-    if (!$asset) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
-    $asset['ips'] = self::ips($id);
-    $asset['attributes'] = self::attributes($id);
-    // Custom fields - will be enabled after tables are created
-    try {
-      $asset['custom_fields'] = self::customFields($id);
-    } catch (Exception $e) {
-      $asset['custom_fields'] = [];
+    $asset = self::fetchAssetById($id);
+    if (!$asset) {
+      http_response_code(404);
+      echo json_encode(['error' => 'not_found']);
+      return;
     }
-    $asset['changes'] = self::changes($id);
     echo json_encode($asset);
   }
 
-  public static function getByIp($ip) {
-    $pdo = DB::conn();
-    // Find asset_id from asset_ips table
-    $stmt = $pdo->prepare("SELECT asset_id FROM asset_ips WHERE ip=? LIMIT 1");
-    $stmt->execute([$ip]);
-    $row = $stmt->fetch();
-    if (!$row) { 
-      http_response_code(404); 
-      echo json_encode(['error'=>'not_found', 'message'=>'No asset found with IP: '.$ip]); 
-      return; 
+  public static function getByIp($ip = null, $mac = null) {
+    $ipParam = trim((string)($ip ?? ''));
+    $macParam = trim((string)($mac ?? ''));
+
+    if ($ipParam === '' && $macParam === '') {
+      http_response_code(400);
+      echo json_encode(['error' => 'invalid_query', 'message' => 'Provide an ip or mac query parameter']);
+      return;
     }
-    // Use existing get() method to return full asset details
-    self::get($row['asset_id']);
+
+    $pdo = DB::conn();
+    $matchedIds = [];
+
+    $ipCandidates = [];
+
+    if ($ipParam !== '') {
+      $rawCandidates = preg_split('/[\s,]+/', $ipParam, -1, PREG_SPLIT_NO_EMPTY);
+      foreach ($rawCandidates as $rawCandidate) {
+        $candidate = trim($rawCandidate);
+        if ($candidate === '') {
+          continue;
+        }
+        $ipCandidates[] = $candidate;
+      }
+      if ($ipCandidates) {
+        $ipCandidates = array_values(array_unique($ipCandidates));
+      }
+      $stmt = $pdo->prepare('SELECT DISTINCT asset_id FROM asset_ips WHERE ip = ?');
+      foreach ($ipCandidates as $candidate) {
+        $stmt->execute([$candidate]);
+        $ids = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        if ($ids) {
+          $matchedIds = array_merge($matchedIds, $ids);
+        }
+      }
+    }
+
+    $macNormalized = null;
+    if ($macParam !== '') {
+      $normalizedCandidate = strtolower(preg_replace('/[^0-9a-f]/i', '', $macParam));
+      if (strlen($normalizedCandidate) >= 12) {
+        $macNormalized = $normalizedCandidate;
+        $stmt = $pdo->prepare("SELECT id FROM assets WHERE mac IS NOT NULL AND mac <> '' AND REPLACE(REPLACE(LOWER(mac), ':', ''), '-', '') = ?");
+        $stmt->execute([$macNormalized]);
+        $ids = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        if ($ids) {
+          $matchedIds = array_merge($matchedIds, $ids);
+        }
+      }
+    }
+
+    $uniqueIds = array_values(array_unique(array_filter($matchedIds)));
+
+    if (empty($uniqueIds)) {
+      http_response_code(404);
+      $message = [];
+      if ($ipParam !== '') { $message[] = "IP: {$ipParam}"; }
+      if ($macParam !== '') { $message[] = "MAC: {$macParam}"; }
+      echo json_encode(['error' => 'not_found', 'message' => 'No asset found for ' . implode(' or ', $message)]);
+      return;
+    }
+
+    $assets = [];
+    foreach ($uniqueIds as $assetId) {
+      $asset = self::fetchAssetById($assetId);
+      if ($asset) {
+        $assets[] = $asset;
+      }
+    }
+
+    if (!$assets) {
+      http_response_code(404);
+      echo json_encode(['error' => 'not_found', 'message' => 'Assets were matched but could not be loaded']);
+      return;
+    }
+
+    $response = [
+      'count' => count($assets),
+      'assets' => $assets,
+      'query' => [
+        'ip' => $ipCandidates,
+        'mac' => $macNormalized
+      ]
+    ];
+
+    if (count($assets) === 1) {
+      $response['asset'] = $assets[0];
+    }
+
+    echo json_encode($response);
   }
 
   public static function create($data, $actor='manual') {
@@ -149,6 +213,33 @@ class AssetController {
     $pdo = DB::conn();
     $pdo->prepare("DELETE FROM assets WHERE id=?")->execute([$id]);
     echo json_encode(['ok'=>true]);
+  }
+
+  private static function fetchAssetById($id) {
+    if (!$id) {
+      return null;
+    }
+    $pdo = DB::conn();
+    $stmt = $pdo->prepare("
+      SELECT a.*, u.display_name as owner_name, u.email as owner_email 
+      FROM assets a 
+      LEFT JOIN users u ON a.owner_user_id = u.id 
+      WHERE a.id=?
+    ");
+    $stmt->execute([$id]);
+    $asset = $stmt->fetch();
+    if (!$asset) {
+      return null;
+    }
+    $asset['ips'] = self::ips($id);
+    $asset['attributes'] = self::attributes($id);
+    try {
+      $asset['custom_fields'] = self::customFields($id);
+    } catch (Exception $e) {
+      $asset['custom_fields'] = [];
+    }
+    $asset['changes'] = self::changes($id);
+    return $asset;
   }
 
   private static function ips($id) {

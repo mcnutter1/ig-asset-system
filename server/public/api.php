@@ -59,7 +59,9 @@ switch ($action) {
 
   case 'asset_get_by_ip':
     require_login(); require_role('user');
-    AssetController::getByIp($_GET['ip'] ?? '');
+    $ip = $_GET['ip'] ?? null;
+    $mac = $_GET['mac'] ?? null;
+    AssetController::getByIp($ip, $mac);
     break;
 
   case 'asset_create':
