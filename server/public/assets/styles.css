@@ -824,6 +824,36 @@ footer {
   border-bottom: none;
 }
 
+.poller-instance-list .muted {
+  color: var(--muted-color);
+  font-style: italic;
+}
+
+.poller-instance-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.poller-instance-row strong {
+  font-size: 0.95rem;
+}
+
+.poller-instance-row input[type="text"] {
+  width: 100%;
+}
+
+.poller-instance-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* Responsive Optimizations */
 @media (max-width: 768px) {
   nav {

@@ -2,3 +2,4 @@ paramiko
 pyyaml
 requests
 mysql-connector-python
+dnspython

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS assets (
   name          VARCHAR(190) NOT NULL,
   type          ENUM('workstation','server','iot','network','mobile','unknown') DEFAULT 'unknown',
   mac           VARCHAR(64),
+  poll_address  VARCHAR(255),
   owner_user_id BIGINT,
   online_status ENUM('online','offline','unknown') DEFAULT 'unknown',
   last_seen     DATETIME NULL,

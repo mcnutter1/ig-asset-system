@@ -90,6 +90,9 @@ apply_sql "sql/user_preferences_table.sql" "Creating user preferences table"
 # Custom fields table
 apply_sql "sql/custom_fields_table.sql" "Creating custom fields table"
 
+# Poller enhancements (polling address, DNS config)
+apply_sql "sql/patches/20251030_add_poll_address.sql" "Applying poller address patch"
+
 # Admin user
 apply_sql "sql/admin_user.sql" "Creating admin user"
 

@@ -63,6 +63,7 @@ const renderAssetCard = (a) => {
     <h3>${a.name} <span class="badge">${a.type}</span></h3>
     <div class="kv">ID: ${a.id}</div>
     <div class="kv">MAC: ${a.mac||'-'}</div>
+  <div class="kv">Polling Address: ${a.poll_address || '-'}</div>
     <div class="kv">IPs: ${ips||'-'}</div>
     <div class="kv">Online: <span class="badge">${a.online_status}</span></div>
     <div class="kv">Last Seen: ${a.last_seen||'-'}</div>
@@ -108,9 +109,11 @@ const editAsset = (a) => {
   const name = prompt('Name', a.name);
   if (name===null) return;
   const mac = prompt('MAC', a.mac||'');
+  const pollAddress = prompt('Polling address (optional)', a.poll_address || '');
   const ips = prompt('IP list (comma-separated)', (a.ips||[]).map(x=>x.ip).join(', '));
   const attrs = prompt('Attributes JSON', JSON.stringify(a.attributes||{}, null, 2));
   const payload = { id:a.id, name, mac, ips: ips? ips.split(',').map(x=>x.trim()).filter(Boolean):[], attributes: JSON.parse(attrs||'{}') };
+  payload.poll_address = pollAddress ? pollAddress.trim() : null;
   api('asset_update','POST',payload).then(()=>openDetail(a.id));
 };
 

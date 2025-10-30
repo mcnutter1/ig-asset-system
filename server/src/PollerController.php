@@ -173,6 +173,111 @@ class PollerController {
       return ['success' => false, 'message' => $e->getMessage()];
     }
   }
+
+  public static function listPollers() {
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("SELECT name, value, description FROM settings WHERE category = 'pollers' ORDER BY name ASC");
+      $stmt->execute();
+      $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+      $pollers = [];
+      foreach ($rows as $row) {
+        $config = [];
+        if (!empty($row['value'])) {
+          $decoded = json_decode($row['value'], true);
+          if (is_array($decoded)) {
+            $config = $decoded;
+          }
+        }
+
+        $dnsServers = [];
+        if (isset($config['dns_servers'])) {
+          $raw = is_array($config['dns_servers']) ? $config['dns_servers'] : [$config['dns_servers']];
+          $dnsServers = array_values(array_filter(array_map(function ($server) {
+            return trim((string)$server);
+          }, $raw)));
+        } elseif (isset($config['dns_server'])) {
+          $value = trim((string)$config['dns_server']);
+          if ($value !== '') {
+            $dnsServers = [$value];
+          }
+        }
+
+        $pollers[] = [
+          'name' => $row['name'],
+          'dns_servers' => $dnsServers,
+          'description' => $row['description'],
+        ];
+      }
+
+      return ['success' => true, 'pollers' => $pollers];
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => $e->getMessage()];
+    }
+  }
+
+  public static function savePoller($data) {
+    $name = trim((string)($data['name'] ?? ''));
+    if ($name === '') {
+      return ['success' => false, 'message' => 'Poller name is required'];
+    }
+
+    $dnsInput = $data['dns_servers'] ?? [];
+    if (is_string($dnsInput)) {
+      $dnsCandidates = array_map('trim', preg_split('/[\s,]+/', $dnsInput, -1, PREG_SPLIT_NO_EMPTY));
+    } elseif (is_array($dnsInput)) {
+      $dnsCandidates = array_map(function ($item) {
+        return trim((string)$item);
+      }, $dnsInput);
+    } else {
+      $dnsCandidates = [];
+    }
+
+    $dnsServers = array_values(array_unique(array_filter($dnsCandidates, function ($value) {
+      return $value !== '';
+    })));
+
+    $payload = ['dns_servers' => $dnsServers];
+    $description = trim((string)($data['description'] ?? 'Poller instance settings'));
+    if ($description === '') {
+      $description = 'Poller instance settings';
+    }
+
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("INSERT INTO settings (category, name, value, description) VALUES ('pollers', ?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value), description = VALUES(description), updated_at = CURRENT_TIMESTAMP");
+      $stmt->execute([$name, json_encode($payload), $description]);
+
+      return [
+        'success' => true,
+        'poller' => [
+          'name' => $name,
+          'dns_servers' => $dnsServers,
+          'description' => $description
+        ]
+      ];
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => $e->getMessage()];
+    }
+  }
+
+  public static function deletePoller($name) {
+    $trimmed = trim((string)$name);
+    if ($trimmed === '' || strtolower($trimmed) === 'default') {
+      return ['success' => false, 'message' => 'Cannot delete default poller'];
+    }
+
+    try {
+      $pdo = DB::conn();
+      $stmt = $pdo->prepare("DELETE FROM settings WHERE category = 'pollers' AND name = ?");
+      $stmt->execute([$trimmed]);
+
+      return ['success' => $stmt->rowCount() > 0];
+    } catch (Exception $e) {
+      return ['success' => false, 'message' => $e->getMessage()];
+    }
+  }
   
   public static function addTarget($target) {
     $targets = self::getTargets();

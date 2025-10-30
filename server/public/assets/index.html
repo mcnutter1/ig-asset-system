@@ -145,6 +145,11 @@
                   Enable Polling
                 </label>
 
+                <label>Polling Address
+                  <input type="text" id="asset-poll-address" placeholder="vpn.example.com or 203.0.113.20">
+                  <small>Optional hostname or IP used for polling. Leave empty to use the first known IP.</small>
+                </label>
+
                 <div class="grid">
                   <label>Poll Type
                     <select id="asset-poll-type">
@@ -328,6 +333,26 @@
             </div>
 
             <div id="poller-config-status" class="alert"></div>
+
+            <h4 style="margin-top: 30px;">Poller Instances</h4>
+            <p style="color: var(--muted-color);">
+              Configure DNS servers for each poller agent. Pollers use the <code>POLLER_NAME</code> environment variable to pick a profile;
+              when no profile is found, the default entry is used and the system resolver applies.
+            </p>
+            <div id="poller-instances-status" class="alert"></div>
+            <div id="poller-instances-list" class="poller-instance-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
+            <div class="grid" style="margin-top: 15px;">
+              <label>Poller Name
+                <input type="text" id="new-poller-name" placeholder="edge-01">
+              </label>
+              <label>DNS Servers (comma-separated)
+                <input type="text" id="new-poller-dns" placeholder="1.1.1.1, 9.9.9.9">
+              </label>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+              <button type="button" id="add-poller-instance" class="secondary">Add Poller Profile</button>
+              <small style="align-self: center; color: var(--muted-color);">The <strong>default</strong> profile cannot be removed.</small>
+            </div>
 
             <h4 style="margin-top: 30px;">Polling Control</h4>
             <div style="display: flex; gap: 10px;">

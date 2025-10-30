@@ -606,6 +606,149 @@ const setupSettingsListeners = () => {
     });
   };
 
+  const pollerList = el('#poller-instances-list');
+  const pollerNameInput = el('#new-poller-name');
+  const pollerDnsInput = el('#new-poller-dns');
+
+  const clearPollerStatus = () => {
+    const statusEl = el('#poller-instances-status');
+    if (statusEl) {
+      statusEl.textContent = '';
+      statusEl.className = 'alert';
+    }
+  };
+
+  const setPollerStatus = (message, type = 'info') => {
+    if (!el('#poller-instances-status')) return;
+    showAlert('poller-instances-status', message, type);
+    setTimeout(clearPollerStatus, 6000);
+  };
+
+  const renderPollerInstances = (pollers = []) => {
+    if (!pollerList) return;
+
+    if (!Array.isArray(pollers) || pollers.length === 0) {
+      pollerList.innerHTML = '<div class="muted">No poller profiles configured yet.</div>';
+      return;
+    }
+
+    pollerList.innerHTML = '';
+
+    pollers.forEach(poller => {
+      const row = document.createElement('div');
+      row.className = 'poller-instance-row';
+      const dnsValue = Array.isArray(poller?.dns_servers) ? poller.dns_servers.join(', ') : '';
+      const isDefault = poller?.name?.toLowerCase() === 'default';
+
+      row.innerHTML = `
+        <div class="poller-instance-name">
+          <strong>${escapeHtml(poller.name || 'Unnamed')}</strong>${isDefault ? ' <span class="badge">default</span>' : ''}
+        </div>
+        <div class="poller-instance-input">
+          <input type="text" value="${escapeHtml(dnsValue)}" data-role="dns-input" placeholder="Comma-separated DNS servers">
+        </div>
+        <div class="poller-instance-actions">
+          <button type="button" class="secondary" data-role="save">Save</button>
+          <button type="button" class="contrast" data-role="delete" ${isDefault ? 'disabled' : ''}>Delete</button>
+        </div>
+      `;
+
+      const dnsInput = row.querySelector('[data-role="dns-input"]');
+      const saveBtn = row.querySelector('[data-role="save"]');
+      const deleteBtn = row.querySelector('[data-role="delete"]');
+
+      if (saveBtn) {
+        saveBtn.onclick = () => {
+          setPollerStatus(`Saving poller profile ${poller.name}...`, 'info');
+          api('poller_settings_save', 'POST', {
+            name: poller.name,
+            dns_servers: dnsInput.value
+          }).then(res => {
+            if (res.success) {
+              setPollerStatus(`Poller ${poller.name} saved`, 'success');
+              refreshPollerInstances();
+            } else {
+              setPollerStatus(res.message || `Failed to save poller ${poller.name}`, 'error');
+            }
+          }).catch(err => {
+            setPollerStatus(`Failed to save poller ${poller.name}: ${err.message}`, 'error');
+          });
+        };
+      }
+
+      if (deleteBtn && !deleteBtn.disabled) {
+        deleteBtn.onclick = () => {
+          if (!confirm(`Delete poller profile "${poller.name}"?`)) {
+            return;
+          }
+          setPollerStatus(`Deleting poller profile ${poller.name}...`, 'info');
+          api(`poller_settings_delete&name=${encodeURIComponent(poller.name)}`, 'POST', {}).then(res => {
+            if (res.success) {
+              setPollerStatus(`Poller ${poller.name} deleted`, 'success');
+              refreshPollerInstances();
+            } else {
+              setPollerStatus(res.message || `Failed to delete poller ${poller.name}`, 'error');
+            }
+          }).catch(err => {
+            setPollerStatus(`Failed to delete poller ${poller.name}: ${err.message}`, 'error');
+          });
+        };
+      }
+
+      pollerList.appendChild(row);
+    });
+  };
+
+  const refreshPollerInstances = () => {
+    if (!pollerList) return Promise.resolve();
+    setPollerStatus('Loading poller profiles...', 'info');
+    return api('pollers_list').then(res => {
+      if (res.success) {
+        renderPollerInstances(res.pollers || []);
+        if (!res.pollers || res.pollers.length === 0) {
+          setPollerStatus('No poller profiles defined. Using system resolver.', 'info');
+        } else {
+          setPollerStatus('Poller profiles loaded', 'success');
+        }
+      } else {
+        setPollerStatus(res.message || 'Failed to load poller profiles', 'error');
+      }
+    }).catch(err => {
+      setPollerStatus(`Failed to load poller profiles: ${err.message}`, 'error');
+    }).finally(() => {
+      setTimeout(clearPollerStatus, 6000);
+    });
+  };
+
+  const addPollerBtn = el('#add-poller-instance');
+  if (addPollerBtn) {
+    addPollerBtn.onclick = () => {
+      const name = pollerNameInput ? pollerNameInput.value.trim() : '';
+      const dns = pollerDnsInput ? pollerDnsInput.value.trim() : '';
+      if (!name) {
+        setPollerStatus('Poller name is required', 'error');
+        return;
+      }
+      setPollerStatus(`Saving poller profile ${name}...`, 'info');
+      api('poller_settings_save', 'POST', { name, dns_servers: dns }).then(res => {
+        if (res.success) {
+          setPollerStatus(`Poller ${name} saved`, 'success');
+          if (pollerNameInput) pollerNameInput.value = '';
+          if (pollerDnsInput) pollerDnsInput.value = '';
+          refreshPollerInstances();
+        } else {
+          setPollerStatus(res.message || `Failed to save poller ${name}`, 'error');
+        }
+      }).catch(err => {
+        setPollerStatus(`Failed to save poller ${name}: ${err.message}`, 'error');
+      });
+    };
+  }
+
+  if (pollerList) {
+    refreshPollerInstances();
+  }
+
   // Polling Log Viewer - Simple load on demand
   let lastLogId = 0;
   let autoRefresh = false;
@@ -1126,6 +1269,7 @@ const viewAsset = (id) => {
       <div class="kv"><strong>Type:</strong> ${a.type}</div>
       <div class="kv"><strong>Owner:</strong> ${ownerName}</div>
       <div class="kv"><strong>MAC:</strong> ${a.mac || '-'}</div>
+  <div class="kv"><strong>Polling Address:</strong> ${a.poll_address || '-'}</div>
       <div class="kv"><strong>IPs:</strong> ${(a.ips || []).map(x => x.ip).join(', ') || '-'}</div>
       <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
       <div class="kv"><strong>Created:</strong> ${a.created_at}</div>
@@ -1169,6 +1313,7 @@ const editAsset = (id) => {
       
       // Polling fields
       el('#asset-poll-enabled').checked = a.poll_enabled || false;
+  el('#asset-poll-address').value = a.poll_address || '';
       el('#asset-poll-type').value = a.poll_type || 'ping';
       el('#asset-poll-username').value = a.poll_username || '';
       el('#asset-poll-password').value = a.poll_password || '';
@@ -1261,7 +1406,8 @@ const setupAllHandlers = () => {
     el('#asset-type').value = '';
     el('#asset-mac').value = '';
     el('#asset-ips').value = '';
-  el('#asset-owner').value = '';
+    el('#asset-owner').value = '';
+    el('#asset-poll-address').value = '';
     el('#asset-attributes').value = '';
     el('#asset-poll-enabled').checked = false;
     el('#asset-poll-type').value = 'ping';
@@ -1315,6 +1461,7 @@ const setupAllHandlers = () => {
         ips: el('#asset-ips').value.split(',').map(ip => ip.trim()).filter(ip => ip),
         owner_user_id: ownerValue ? parseInt(ownerValue, 10) : null,
         attributes: attributes,
+        poll_address: (el('#asset-poll-address').value || '').trim() || null,
         poll_enabled: el('#asset-poll-enabled').checked,
         poll_type: el('#asset-poll-type').value,
         poll_username: el('#asset-poll-username').value || null,

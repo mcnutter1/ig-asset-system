@@ -10,13 +10,13 @@ CREATE TABLE IF NOT EXISTS settings (
   UNIQUE KEY unique_setting (category, name)
 ) ENGINE=InnoDB;
 
--- Insert default LDAP settings
 INSERT INTO settings (category, name, value, description) VALUES
   ('ldap', 'enabled', 'false', 'Enable LDAP authentication'),
-  ('ldap', 'host', 'ldap://ad.example.com', 'LDAP server hostname'),
+  ('pollers', 'default', '{"dns_servers":[]}', 'Default poller instance settings')
   ('ldap', 'port', '389', 'LDAP server port'),
   ('ldap', 'bind_dn', 'CN=ldap-reader,OU=Service Accounts,DC=example,DC=com', 'LDAP bind DN for authentication'),
   ('ldap', 'bind_password', '', 'LDAP bind password'),
   ('ldap', 'base_dn', 'DC=example,DC=com', 'LDAP base DN for user searches'),
-  ('ldap', 'user_attr', 'sAMAccountName', 'LDAP user attribute for login')
+  ('ldap', 'user_attr', 'sAMAccountName', 'LDAP user attribute for login'),
+  ('pollers', 'default', '{"dns_servers":[]}', 'Default poller instance settings')
   ON DUPLICATE KEY UPDATE description = VALUES(description);

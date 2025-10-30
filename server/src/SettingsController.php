@@ -43,10 +43,17 @@ class SettingsController {
     $pdo->beginTransaction();
     
     try {
-      $stmt = $pdo->prepare("UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE category = ? AND name = ?");
-      
-      foreach ($settings as $name => $value) {
-        $stmt->execute([$value, $category, $name]);
+      $stmt = $pdo->prepare("INSERT INTO settings (category, name, value, description) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = CURRENT_TIMESTAMP, description = IFNULL(description, VALUES(description))");
+
+      foreach ($settings as $name => $entry) {
+        if (is_array($entry) && array_key_exists('value', $entry)) {
+          $value = $entry['value'];
+          $description = $entry['description'] ?? null;
+        } else {
+          $value = $entry;
+          $description = null;
+        }
+        $stmt->execute([$category, $name, $value, $description]);
       }
       
       $pdo->commit();

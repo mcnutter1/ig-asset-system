@@ -16,6 +16,10 @@ import sys
 import os
 import re
 import ipaddress
+try:
+    import dns.resolver as dns_resolver
+except ImportError:  # pragma: no cover - optional dependency
+    dns_resolver = None
 from datetime import datetime
 from config_loader import load_php_config
 
@@ -146,6 +150,17 @@ def is_loopback_address(value):
         return False
     try:
         return ipaddress.ip_address(literal).is_loopback
+    except ValueError:
+        return False
+
+
+def is_ip_literal(value):
+    literal = normalize_ip_literal(value)
+    if not literal:
+        return False
+    try:
+        ipaddress.ip_address(literal)
+        return True
     except ValueError:
         return False
 
@@ -472,10 +487,15 @@ def current_timestamp():
 
 class DatabasePoller:
     def __init__(self):
+    self.poller_name = os.getenv('POLLER_NAME', 'default')
+    self._dns_warning_logged = False
+    self._dns_error_hosts = set()
+    self._dns_cache = {}
         self.config = self.load_config_from_db()
         self.db_config = self.config['database']
         self.api_config = self.config['api']
         self.poller_config = self.config['poller']
+        self.poller_dns_servers = self.poller_config.get('dns_servers', [])
     
     def get_setting(self, conn, category, name, default=None):
         """Get a setting from the database"""
@@ -525,6 +545,15 @@ class DatabasePoller:
                     'api_key': self.get_setting(conn, 'poller', 'api_key', 'POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
                 }
             }
+
+            poller_specific_raw = self.get_setting(conn, 'pollers', self.poller_name, None)
+            dns_servers = self.parse_dns_servers(poller_specific_raw)
+            if not dns_servers and self.poller_name != 'default':
+                default_raw = self.get_setting(conn, 'pollers', 'default', None)
+                dns_servers = self.parse_dns_servers(default_raw)
+
+            config['poller']['dns_servers'] = dns_servers
+            config['poller']['name'] = self.poller_name
             
             # Check if we have a valid agent token, if not try to get/create one
             agent_token = self.ensure_agent_token(conn)
@@ -546,6 +575,8 @@ class DatabasePoller:
                     'interval': 30,
                     'timeout': 10,
                     'ping_timeout': 1,
+                    'dns_servers': [],
+                    'name': self.poller_name
                 },
                 'api': {
                     'base_url': 'http://localhost:8080/api.php',
@@ -553,6 +584,44 @@ class DatabasePoller:
                 }
             }
     
+    def parse_dns_servers(self, raw):
+        if raw is None:
+            return []
+
+        source = raw
+        if isinstance(raw, str):
+            trimmed = raw.strip()
+            if trimmed == '':
+                return []
+            try:
+                decoded = json.loads(trimmed)
+                source = decoded
+            except Exception:
+                source = trimmed
+
+        if isinstance(source, dict):
+            candidates = source.get('dns_servers')
+            if candidates is None and 'dns_server' in source:
+                candidates = source['dns_server']
+        elif isinstance(source, list):
+            candidates = source
+        else:
+            candidates = source
+
+        if isinstance(candidates, str):
+            parts = re.split(r'[\s,]+', candidates)
+        elif isinstance(candidates, list):
+            parts = candidates
+        else:
+            parts = []
+
+        cleaned = []
+        for item in parts:
+            value = str(item).strip()
+            if value and value not in cleaned:
+                cleaned.append(value)
+        return cleaned
+
     def ensure_agent_token(self, conn):
         """Ensure we have a valid agent token, create if needed"""
         try:
@@ -582,6 +651,80 @@ class DatabasePoller:
     def get_db_connection(self):
         """Get database connection"""
         return mysql.connector.connect(**self.db_config)
+
+    def resolve_host(self, address):
+        literal = (address or '').strip()
+        if literal in self._dns_cache:
+            return self._dns_cache[literal]
+
+        if literal == '':
+            self._dns_cache[literal] = ''
+            return ''
+
+        normalized = normalize_ip_literal(literal)
+        if is_ip_literal(normalized):
+            self._dns_cache[literal] = normalized
+            return normalized
+
+        dns_servers = self.poller_dns_servers or []
+        if not dns_servers:
+            self._dns_cache[literal] = literal
+            return literal
+
+        if dns_resolver is None:
+            if not self._dns_warning_logged:
+                self.log_to_db('warning', f"Custom DNS servers configured but dnspython is not installed; using system resolver for {literal}")
+                self._dns_warning_logged = True
+            self._dns_cache[literal] = literal
+            return literal
+
+        resolved = None
+        errors = []
+        timeout = max(1, min(self.poller_config.get('timeout', 10), 15))
+
+        for server in dns_servers:
+            server = (server or '').strip()
+            if not server:
+                continue
+            try:
+                resolver = dns_resolver.Resolver(configure=False)
+                resolver.nameservers = [server]
+                resolver.timeout = timeout
+                resolver.lifetime = timeout
+
+                for record_type in ('A', 'AAAA'):
+                    try:
+                        answers = resolver.resolve(literal, record_type)
+                        for answer in answers:
+                            candidate = normalize_ip_literal(str(answer))
+                            if candidate:
+                                resolved = candidate
+                                break
+                        if resolved:
+                            break
+                    except Exception as exc:
+                        errors.append(f"{server} {record_type}: {exc}")
+                        continue
+
+                if resolved:
+                    break
+
+            except Exception as exc:
+                errors.append(f"{server}: {exc}")
+                continue
+
+        if resolved:
+            self._dns_cache[literal] = resolved
+            if literal in self._dns_error_hosts:
+                self._dns_error_hosts.discard(literal)
+            return resolved
+
+        if errors and literal not in self._dns_error_hosts:
+            self.log_to_db('debug', f"DNS lookup for {literal} via custom servers failed ({errors[0]})", literal)
+            self._dns_error_hosts.add(literal)
+
+        self._dns_cache[literal] = literal
+        return literal
     
     def should_run(self):
         """Check if poller should be running"""
@@ -608,13 +751,13 @@ class DatabasePoller:
             # Query assets that have polling enabled
             cursor.execute("""
                 SELECT 
-                    a.id, a.name, a.type, a.mac,
+                    a.id, a.name, a.type, a.mac, a.poll_address,
                     a.poll_type, a.poll_username, a.poll_password, a.poll_port,
                     GROUP_CONCAT(ai.ip SEPARATOR ',') as ips
                 FROM assets a
                 LEFT JOIN asset_ips ai ON a.id = ai.asset_id
                 WHERE a.poll_enabled = TRUE
-                GROUP BY a.id, a.name, a.type, a.mac, a.poll_type, a.poll_username, a.poll_password, a.poll_port
+                GROUP BY a.id, a.name, a.type, a.mac, a.poll_address, a.poll_type, a.poll_username, a.poll_password, a.poll_port
             """)
             
             assets = cursor.fetchall()
@@ -627,19 +770,29 @@ class DatabasePoller:
                 ips_str = asset['ips']
                 self.log_to_db('debug', f"Asset {asset['name']}: raw ips from DB = '{ips_str}'", asset['name'])
                 
-                ips = ips_str.split(',') if ips_str else []
-                primary_ip = ips[0].strip() if ips else None
-                
-                self.log_to_db('debug', f"Asset {asset['name']}: parsed ips = {ips}, primary_ip = '{primary_ip}'", asset['name'])
-                
-                if not primary_ip:
-                    self.log_to_db('warning', f"Asset {asset['name']} has polling enabled but no IP address", asset['name'])
+                ips = [ip.strip() for ip in ips_str.split(',') if ip.strip()] if ips_str else []
+                primary_ip = ips[0] if ips else None
+                poll_address = (asset.get('poll_address') or '').strip()
+
+                self.log_to_db('debug', f"Asset {asset['name']}: parsed ips = {ips}, primary_ip = '{primary_ip}', poll_address = '{poll_address}'", asset['name'])
+
+                poll_target = poll_address or primary_ip
+
+                if not poll_target:
+                    self.log_to_db('warning', f"Asset {asset['name']} has polling enabled but no polling address or IP", asset['name'])
                     continue
                 
+                resolved_host = self.resolve_host(poll_target)
+
                 target = {
                     'asset_id': asset['id'],
                     'name': asset['name'],
-                    'host': primary_ip,
+                    'host': resolved_host,
+                    'resolved_host': resolved_host,
+                    'poll_address': poll_address or None,
+                    'host_display': poll_target,
+                    'known_ips': ips,
+                    'last_known_ip': primary_ip,
                     'type': asset['poll_type'] or 'ping',
                     'username': asset['poll_username'] or '',
                     'password': asset['poll_password'] or '',
@@ -648,7 +801,7 @@ class DatabasePoller:
                 }
                 targets.append(target)
                 
-                self.log_to_db('debug', f"Asset {asset['name']}: created target with host='{target['host']}'", asset['name'])
+                self.log_to_db('debug', f"Asset {asset['name']}: created target with poll_address='{poll_address}' resolved_host='{target['host']}'", asset['name'])
             
             return targets
             
@@ -687,20 +840,30 @@ class DatabasePoller:
         except Exception as e:
             print(f"Error updating last run: {e}")
     
-    def ping(self, host, timeout=None):
-        """Simple ping test"""
+    def ping(self, host_label, resolved_host=None, timeout=None):
+        """Simple reachability check via DNS resolution"""
         if timeout is None:
             timeout = self.poller_config['ping_timeout']
+
+        candidate = resolved_host or self.resolve_host(host_label)
+        if not candidate:
+            return False
+
         try:
             socket.setdefaulttimeout(timeout)
-            socket.gethostbyname(host)
+            if is_ip_literal(candidate):
+                socket.getaddrinfo(candidate, None)
+            else:
+                socket.gethostbyname(candidate)
             return True
-        except:
+        except Exception:
             return False
     
     def unix_probe(self, target):
         """Probe Unix-like systems (Linux, *BSD, macOS) via SSH"""
-        host = target['host']
+        resolved_host = target.get('resolved_host') or target.get('host')
+        poll_address = target.get('poll_address') or target.get('host_display') or resolved_host
+        host = resolved_host or poll_address
         username = target.get('username')
         password = target.get('password')
         asset_type = target.get('device_type') or 'server'
@@ -708,9 +871,9 @@ class DatabasePoller:
 
         asset = {
             'id': target.get('asset_id'),
-            'name': host,
+            'name': poll_address or host,
             'type': asset_type or 'server',
-            'ips': [host],
+            'ips': [resolved_host] if resolved_host else ([poll_address] if poll_address else []),
             'attributes': {
                 'os': {
                     'family': os_hint
@@ -722,14 +885,14 @@ class DatabasePoller:
 
         if not username:
             message = 'Missing SSH username for target'
-            self.log_to_db('error', f"{message}: {host}", host)
+            self.log_to_db('error', f"{message}: {poll_address or host}", poll_address or host)
             asset['attributes']['poller']['error'] = message
             asset['attributes']['poller']['collected_at'] = current_timestamp()
             return asset
 
         ssh = None
         try:
-            self.log_to_db('info', f"Probing Unix host {host}...", host)
+            self.log_to_db('info', f"Probing Unix host {poll_address or host} (resolved: {host})...", poll_address or host)
             ssh = connect_ssh({
                 'host': host,
                 'username': username,
@@ -761,11 +924,11 @@ class DatabasePoller:
             if metrics_info:
                 asset['attributes']['metrics'] = metrics_info
 
-            self.log_to_db('success', f"Successfully probed {host}: {asset['name']}", host)
+            self.log_to_db('success', f"Successfully probed {poll_address or host}: {asset['name']}", poll_address or host)
 
         except Exception as exc:
-            error_message = f"Error probing {host}: {exc}"
-            self.log_to_db('error', error_message, host)
+            error_message = f"Error probing {poll_address or host}: {exc}"
+            self.log_to_db('error', error_message, poll_address or host)
             asset['attributes']['poller']['error'] = str(exc)
         finally:
             if ssh:
@@ -776,19 +939,21 @@ class DatabasePoller:
     
     def windows_probe(self, target):
         """Probe Windows system (basic implementation)"""
-        host = target['host']
+        resolved_host = target.get('resolved_host') or target.get('host')
+        poll_address = target.get('poll_address') or target.get('host_display') or resolved_host
+        host = resolved_host or poll_address
         info = {
             "id": target.get('asset_id'),  # Include asset ID for updates
-            "name": host,
+            "name": poll_address or host,
             "type": "workstation",
-            "ips": [host],
+            "ips": [resolved_host] if resolved_host else ([poll_address] if poll_address else []),
             "attributes": {
                 "os": {"family": "windows", "hostname": host},
                 "poller": {"collected_at": current_timestamp()}
             },
             "mac": None
         }
-        print(f"Basic probe for Windows host: {host}")
+        print(f"Basic probe for Windows host: {poll_address or host} (resolved: {host})")
         return info
     
     def push_update(self, asset, online=True):
@@ -843,8 +1008,10 @@ class DatabasePoller:
         
         for target in targets:
             poll_type = target.get('type', 'ping')
-            host = target['host']
-            asset_name = target.get('name', host)
+            resolved_host = target.get('resolved_host') or target.get('host')
+            poll_address = target.get('poll_address') or target.get('host_display') or resolved_host
+            host = resolved_host or poll_address
+            asset_name = target.get('name', poll_address or host)
             
             # Probe based on poll type
             if poll_type == 'ssh':
@@ -857,7 +1024,7 @@ class DatabasePoller:
                     "id": target.get('asset_id'),
                     "name": asset_name,
                     "type": target.get('device_type', 'unknown'),
-                    "ips": [host],
+                    "ips": [resolved_host] if resolved_host else ([poll_address] if poll_address else []),
                     "mac": None,
                     "attributes": {
                         "poller": {"collected_at": current_timestamp()}
@@ -868,9 +1035,10 @@ class DatabasePoller:
                 continue
             
             # Check if host is online
-            online = self.ping(host)
+            online = self.ping(poll_address or host, resolved_host)
             status_msg = "online" if online else "offline"
-            self.log_to_db('info', f"Asset {asset_name} ({host}) is {status_msg}", host)
+            label = poll_address or host
+            self.log_to_db('info', f"Asset {asset_name} ({label} -> {resolved_host or 'unresolved'}) is {status_msg}", label)
             
             # Push update to API
             self.push_update(asset, online)
@@ -884,6 +1052,9 @@ class DatabasePoller:
             self.config = self.load_config_from_db()
             self.poller_config = self.config['poller']
             self.api_config = self.config['api']
+            self.poller_dns_servers = self.poller_config.get('dns_servers', [])
+            self._dns_cache.clear()
+            self._dns_error_hosts.clear()
             
             if old_interval != self.poller_config['interval']:
                 print(f"Updated polling interval: {old_interval}s -> {self.poller_config['interval']}s")

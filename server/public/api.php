@@ -198,6 +198,23 @@ switch ($action) {
     echo json_encode(PollerController::removeTarget($index));
     break;
 
+  case 'pollers_list':
+    require_login(); require_role('admin');
+    echo json_encode(PollerController::listPollers());
+    break;
+
+  case 'poller_settings_save':
+    require_login(); require_role('admin');
+    $in = json_input();
+    echo json_encode(PollerController::savePoller($in));
+    break;
+
+  case 'poller_settings_delete':
+    require_login(); require_role('admin');
+    $name = $_GET['name'] ?? '';
+    echo json_encode(PollerController::deletePoller($name));
+    break;
+
   case 'poller_logs':
     require_login();
     $since = $_GET['since'] ?? null;
