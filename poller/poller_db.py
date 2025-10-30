@@ -487,10 +487,11 @@ def current_timestamp():
 
 class DatabasePoller:
     def __init__(self):
-    self.poller_name = os.getenv('POLLER_NAME', 'default')
-    self._dns_warning_logged = False
-    self._dns_error_hosts = set()
-    self._dns_cache = {}
+        self.poller_name = os.getenv('POLLER_NAME', 'default')
+        self._dns_warning_logged = False
+        self._dns_error_hosts = set()
+        self._dns_cache = {}
+
         self.config = self.load_config_from_db()
         self.db_config = self.config['database']
         self.api_config = self.config['api']
