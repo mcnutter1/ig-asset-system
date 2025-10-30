@@ -294,16 +294,22 @@ class AssetController {
     ");
     $stmt->execute([$id]);
     $fields = $stmt->fetchAll();
-    
-    // Decode JSON fields and structure the result
+
+    // Decode JSON fields and re-key by field name
     $result = [];
     foreach ($fields as $field) {
       if ($field['select_options']) {
-        $field['select_options'] = json_decode($field['select_options'], true);
+        $decoded = json_decode($field['select_options'], true);
+        $field['select_options'] = is_array($decoded) ? $decoded : $field['select_options'];
       }
-      $result[] = $field;
+      $name = $field['name'] ?? null;
+      if ($name) {
+        $result[$name] = $field;
+      } else {
+        $result[] = $field;
+      }
     }
-    
+
     return $result;
   }
 
