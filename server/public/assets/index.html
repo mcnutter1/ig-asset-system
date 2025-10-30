@@ -90,91 +90,86 @@
       <!-- Asset Detail Drawer -->
       <div id="drawer" class="drawer hidden">
         <div class="drawer-content">
-          <button class="close">&times;</button>
-          <form id="custom-field-form">
+          <button type="button" class="close" aria-label="Close">&times;</button>
+          <div id="asset-detail"></div>
+        </div>
+      </div>
+
+      <!-- Asset Create/Edit Modal -->
+      <dialog id="asset-modal">
+        <article style="width: 600px;">
+          <header>
+            <h3 id="modal-title">Add Asset</h3>
+            <button type="button" aria-label="Close" class="modal-close"></button>
+          </header>
+          <form id="asset-form">
+            <input type="hidden" id="asset-id">
+
             <div class="modal-body">
-              <input type="hidden" id="field-id">
-            
-              <label>Field Name (identifier, snake_case)
-                <input type="text" id="field-name" placeholder="serial_number" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
-              </label>
-
-              <label>Display Label
-                <input type="text" id="field-label" placeholder="Serial Number" required>
-              </label>
-
-              <label>Field Type
-                <select id="field-type" required>
-                  <option value="text">Text</option>
-                  <option value="textarea">Text Area</option>
-                  <option value="number">Number</option>
-                  <option value="date">Date</option>
-                  <option value="select">Dropdown Select</option>
-                  <option value="checkbox">Checkbox</option>
-                  <option value="email">Email</option>
-                  <option value="url">URL</option>
-                </select>
-              </label>
-
-              <div id="select-options-container" style="display: none;">
-                <label>Select Options (comma-separated)
-                  <input type="text" id="select-options" placeholder="Option 1, Option 2, Option 3">
+              <div class="grid">
+                <label>Name
+                  <input type="text" id="asset-name" placeholder="Server-01" required>
+                </label>
+                <label>Type
+                  <input type="text" id="asset-type" placeholder="server" required>
                 </label>
               </div>
 
-              <label>Help Text (optional)
-                <textarea id="field-help" rows="2" placeholder="Shown to users when filling out this field"></textarea>
+              <div class="grid">
+                <label>Owner
+                  <select id="asset-owner">
+                    <option value="">No Owner</option>
+                  </select>
+                </label>
+                <label>MAC Address
+                  <input type="text" id="asset-mac" placeholder="AA:BB:CC:DD:EE:FF">
+                </label>
+              </div>
+
+              <label>IP Addresses
+                <input type="text" id="asset-ips" placeholder="192.168.1.10, 192.168.1.11">
+                <small>Use commas to separate multiple IP addresses.</small>
               </label>
 
-              <label>Default Value (optional)
-                <input type="text" id="field-default" placeholder="Default value">
+              <label>Attributes (JSON)
+                <textarea id="asset-attributes" rows="4" placeholder='{"os": "Ubuntu 22.04"}'></textarea>
+                <small>Optional key/value metadata stored as JSON.</small>
               </label>
 
-              <label>Applies To Asset Types (comma-separated)
-                <input type="text" id="field-applies-to" placeholder="server, workstation">
-                <small>Leave blank to apply to all asset types.</small>
-              </label>
+              <details open>
+                <summary>Polling Configuration</summary>
+                <label>
+                  <input type="checkbox" id="asset-poll-enabled">
+                  Enable Polling
+                </label>
 
-              <label>Display Order
-                <input type="number" id="field-order" min="0" step="1" value="0">
-                <small>Fields are sorted ascending by this number.</small>
-              </label>
+                <div class="grid">
+                  <label>Poll Type
+                    <select id="asset-poll-type">
+                      <option value="ping">Ping (Online Check Only)</option>
+                      <option value="ssh">SSH (Linux/Unix)</option>
+                      <option value="wmi">WMI (Windows)</option>
+                      <option value="snmp">SNMP</option>
+                    </select>
+                  </label>
+                  <label>Poll Port (optional)
+                    <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
+                  </label>
+                </div>
 
-              <label>
-                <input type="checkbox" id="field-required">
-                Field is required
-              </label>
+                <div class="grid">
+                  <label>Poll Username
+                    <input type="text" id="asset-poll-username" placeholder="admin">
+                  </label>
+                  <label>Poll Password
+                    <input type="password" id="asset-poll-password" placeholder="Password">
+                  </label>
+                </div>
+              </details>
+
+              <div id="custom-fields-container"></div>
             </div>
-            <footer class="modal-footer">
-              <button type="button" class="secondary" onclick="document.getElementById('custom-field-modal').close()">Cancel</button>
-              <button type="submit">Save Field</button>
-            </footer>
-          </form>
-                <input type="checkbox" id="asset-poll-enabled">
-                Enable Polling
-              </label>
-              
-              <label>Poll Type
-                <select id="asset-poll-type">
-                  <option value="ping">Ping (Online Check Only)</option>
-                  <option value="ssh">SSH (Linux/Unix)</option>
-                  <option value="wmi">WMI (Windows)</option>
-                  <option value="snmp">SNMP</option>
-                </select>
-              </label>
-              
-              <label>Poll Username (for SSH/WMI)
-                <input type="text" id="asset-poll-username" placeholder="admin">
-              </label>
-              
-              <label>Poll Password (for SSH/WMI)
-                <input type="password" id="asset-poll-password" placeholder="Password">
-              </label>
-              
-              <label>Poll Port (optional)
-                <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
-              </label>
-            </div>
+
             <footer class="modal-footer">
               <button type="button" class="secondary modal-cancel">Cancel</button>
               <button type="submit">Save Asset</button>
