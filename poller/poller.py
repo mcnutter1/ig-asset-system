@@ -54,6 +54,7 @@ def extract_int(value):
 def parse_ifconfig(raw):
     interfaces = []
     current = None
+    mac_pattern = re.compile(r'(?:ether|lladdr|address)\s+([0-9A-Fa-f:]{6,})')
     for line in raw.splitlines():
         if not line.strip():
             continue
@@ -73,11 +74,61 @@ def parse_ifconfig(raw):
                 parts = stripped.split()
                 if len(parts) >= 2:
                     current['addresses'].append(parts[1])
-            elif 'ether ' in stripped:
-                current['mac'] = stripped.split('ether ', 1)[1].split()[0]
-            elif 'lladdr ' in stripped:
-                current['mac'] = stripped.split('lladdr ', 1)[1].split()[0]
+            else:
+                match = mac_pattern.search(stripped)
+                if match:
+                    current['mac'] = match.group(1).lower()
     return interfaces
+
+
+def parse_df_output(raw):
+    disks = []
+    if not raw:
+        return disks
+    lines = [line for line in raw.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return disks
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) < 6:
+            continue
+        filesystem = parts[0]
+        try:
+            size_kb = int(parts[1])
+            used_kb = int(parts[2])
+            avail_kb = int(parts[3])
+        except (TypeError, ValueError):
+            size_kb = used_kb = avail_kb = None
+        capacity = parts[4]
+        mount_point = ' '.join(parts[5:])
+        disks.append({
+            'filesystem': filesystem,
+            'size_kb': size_kb,
+            'used_kb': used_kb,
+            'available_kb': avail_kb,
+            'capacity': capacity,
+            'mount': mount_point
+        })
+    return disks
+
+
+def parse_uptime_load(raw):
+    if not raw:
+        return None
+    match = re.search(r'load averages?:\s*([0-9.,\s]+)', raw)
+    if not match:
+        return None
+    numbers = [item.strip() for item in match.group(1).split(',') if item.strip()]
+    if len(numbers) < 3:
+        return None
+    try:
+        return {
+            '1m': float(numbers[0]),
+            '5m': float(numbers[1]),
+            '15m': float(numbers[2])
+        }
+    except (TypeError, ValueError):
+        return None
 
 
 def run_ssh_command(ssh, command, timeout=8):
@@ -116,7 +167,12 @@ def collect_unix_os_info(ssh, os_hint='linux'):
     kernel_lower = kernel_name.lower()
     if kernel_name:
         os_info['kernel_name'] = kernel_name
-        if 'bsd' in kernel_lower:
+        if kernel_lower in ('openbsd', 'freebsd', 'netbsd', 'dragonfly'):
+            os_info['family'] = 'bsd'
+            distro = kernel_name if kernel_name else kernel_lower
+            os_info['distribution'] = distro
+            os_info['id'] = kernel_lower
+        elif 'bsd' in kernel_lower:
             os_info['family'] = 'bsd'
             os_info['distribution'] = kernel_name
         elif kernel_lower in ('linux', 'gnu/linux'):
@@ -160,9 +216,12 @@ def collect_unix_os_info(ssh, os_hint='linux'):
             if name:
                 os_info['name'] = name.strip()
                 os_info.setdefault('distribution', name.strip())
+                os_info.setdefault('id', name.strip().lower())
 
     if 'bsd' in os_info.get('family', '') and not os_info.get('distribution') and kernel_name:
         os_info['distribution'] = kernel_name
+    if os_info.get('distribution') and not os_info.get('id'):
+        os_info['id'] = os_info['distribution'].lower().replace(' ', '-')
 
     return os_info
 
@@ -206,6 +265,18 @@ def collect_unix_network_info(ssh):
 
     if not interfaces:
         ifconfig_raw, _ = run_ssh_command(ssh, 'ifconfig -a')
+        if ifconfig_raw.strip():
+            interfaces = parse_ifconfig(ifconfig_raw)
+            for iface in interfaces:
+                for addr in iface.get('addresses', []):
+                    ip = addr.split('%')[0].split('/')[0]
+                    if ip and ip not in ip_addresses:
+                        ip_addresses.append(ip)
+                mac = iface.get('mac')
+                if mac and not primary_mac and not iface['name'].startswith(('lo', 'lo0')):
+                    primary_mac = mac
+    if not interfaces:
+        ifconfig_raw, _ = run_ssh_command(ssh, 'ifconfig')
         if ifconfig_raw.strip():
             interfaces = parse_ifconfig(ifconfig_raw)
             for iface in interfaces:
@@ -294,6 +365,84 @@ def collect_unix_hardware_info(ssh, os_family):
     return hardware
 
 
+def collect_unix_resource_metrics(ssh, os_family):
+    metrics = {}
+
+    uptime_raw, _ = run_ssh_command(ssh, 'uptime')
+    load = parse_uptime_load(uptime_raw)
+    if load:
+        metrics['cpu_load'] = load
+
+    family = (os_family or '').lower()
+    memory = {}
+    if family.startswith('bsd'):
+        physmem_raw, _ = run_ssh_command(ssh, 'sysctl -n hw.physmem')
+        total_bytes = extract_int(physmem_raw)
+        if total_bytes:
+            memory['total_bytes'] = total_bytes
+        usermem_raw, _ = run_ssh_command(ssh, 'sysctl -n hw.usermem')
+        user_bytes = extract_int(usermem_raw)
+        if user_bytes:
+            memory['user_bytes'] = user_bytes
+        pagesize_raw, _ = run_ssh_command(ssh, 'sysctl -n hw.pagesize')
+        page_size = extract_int(pagesize_raw)
+        free_pages_raw, _ = run_ssh_command(ssh, 'sysctl -n vm.stats.vm.v_free_count')
+        free_pages = extract_int(free_pages_raw)
+        if page_size and free_pages:
+            memory['free_bytes'] = page_size * free_pages
+        swap_list_raw, _ = run_ssh_command(ssh, 'swapctl -l -k')
+        swap_total_kb = 0
+        swap_free_kb = 0
+        if swap_list_raw:
+            lines = [line for line in swap_list_raw.splitlines() if line.strip()]
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                try:
+                    total_kb = int(parts[1])
+                    used_kb = int(parts[2])
+                    avail_kb = int(parts[3])
+                except (TypeError, ValueError):
+                    continue
+                swap_total_kb += total_kb
+                swap_free_kb += avail_kb
+        if swap_total_kb:
+            memory['swap_total_bytes'] = swap_total_kb * 1024
+        if swap_free_kb:
+            memory['swap_free_bytes'] = swap_free_kb * 1024
+    else:
+        meminfo_raw, _ = run_ssh_command(ssh, 'cat /proc/meminfo')
+        if meminfo_raw:
+            meminfo = {}
+            for line in meminfo_raw.splitlines():
+                if ':' not in line:
+                    continue
+                key, value = line.split(':', 1)
+                key = key.strip()
+                num = extract_int(value)
+                if num is None:
+                    continue
+                if 'kb' in value.lower():
+                    num *= 1024
+                meminfo[key] = num
+            if meminfo:
+                memory['total_bytes'] = meminfo.get('MemTotal')
+                memory['available_bytes'] = meminfo.get('MemAvailable')
+                memory['free_bytes'] = meminfo.get('MemFree')
+                memory['swap_total_bytes'] = meminfo.get('SwapTotal')
+                memory['swap_free_bytes'] = meminfo.get('SwapFree')
+    if memory:
+        metrics['memory'] = {k: v for k, v in memory.items() if v is not None}
+
+    df_raw, _ = run_ssh_command(ssh, 'df -P -k')
+    disks = parse_df_output(df_raw)
+    if disks:
+        metrics['disks'] = disks
+
+    return metrics
+
+
 def current_timestamp():
     return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
@@ -340,6 +489,10 @@ def unix_probe(target, os_hint='linux'):
         if hardware_info:
             asset['attributes']['hardware'] = hardware_info
 
+        metrics_info = collect_unix_resource_metrics(ssh, os_info.get('family', ''))
+        if metrics_info:
+            asset['attributes']['metrics'] = metrics_info
+
     except Exception as exc:
         asset.setdefault('attributes', {}).setdefault('poller', {})['error'] = str(exc)
     finally:
@@ -375,7 +528,7 @@ def iterate_targets(cfg):
         for entry in cfg['targets']:
             yield entry
         return
-    for key in ('linux', 'bsd', 'windows'):
+    for key in ('linux', 'bsd', 'openbsd', 'freebsd', 'netbsd', 'windows'):
         for entry in cfg.get(key, []) or []:
             enriched = dict(entry)
             enriched.setdefault('os', key)
