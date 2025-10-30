@@ -3,7 +3,7 @@
 - **MySQL** stores normalized searchable fields (MAC/IPv4/IPv6) plus a flexible JSON blob for nested attributes.
 - **PHP API** performs CRUD, history logging, LDAP auth, and agent/poller ingestion.
 - **Agents** (Linux/Python and Windows/C#) push updates on an interval (default 60s).
-- **Poller** augments via SSH/WMI (upsert by MAC/name) and can mark online/offline.
+- **Poller** augments via SSH/WMI/WinRM (upsert by MAC/name) and can mark online/offline.
 - **Sanitization rules** provide admin-managed JSON filters that pollers download to strip loopback/link-local or other sensitive data before reporting it to the API.
 - **Frontend** is a lightweight SPA (no heavy framework) for speed and portability.
 
@@ -16,3 +16,10 @@
 - Add more controllers and endpoints.
 - Expand agents to gather software inventory, services, CVEs, etc.
 - Build richer UI or replace with your preferred framework.
+
+## Windows Polling
+
+- The Python poller now targets Windows hosts using a tiered strategy: it prefers native WMI/DCOM (via Impacket) and automatically falls back to WinRM/PowerShell (via pywinrm) when DCOM is blocked.
+- Collected datasets mirror the Unix probe: OS identity, architecture, boot time, adapter inventory (with MAC/IP details), disk usage, hardware metadata, and an optional installed applications list.
+- Configure Windows credentials in `poller/config.yml`; optional keys such as `domain`, `winrm_transport`, `winrm_use_ssl`, `applications_limit`, and `collect_applications` fine-tune authentication and inventory breadth.
+- Results are merged into the standard asset payload so existing API/UX surfaces immediately benefit from richer Windows telemetry.

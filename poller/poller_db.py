@@ -18,6 +18,7 @@ import re
 import ipaddress
 import copy
 import hashlib
+from windows_collectors import collect_windows_asset, WindowsProbeError
 try:
     import dns.resolver as dns_resolver
 except ImportError:  # pragma: no cover - optional dependency
@@ -1242,24 +1243,172 @@ class DatabasePoller:
         return self.sanitize_asset_payload(asset)
     
     def windows_probe(self, target):
-        """Probe Windows system (basic implementation)"""
+        """Probe Windows system using WMI/WinRM collectors."""
         resolved_host = target.get('resolved_host') or target.get('host')
         poll_address = target.get('poll_address') or target.get('host_display') or resolved_host
         host = resolved_host or poll_address
-        info = {
-            "id": target.get('asset_id'),  # Include asset ID for updates
+
+        asset = {
+            "id": target.get('asset_id'),
             "name": poll_address or host,
-            "type": "workstation",
+            "type": target.get('device_type') or 'workstation',
             "ips": [resolved_host] if resolved_host else ([poll_address] if poll_address else []),
             "attributes": {
                 "os": {"family": "windows", "hostname": host},
-                "poller": {"collected_at": current_timestamp()}
+                "poller": {}
             },
             "mac": None
         }
-        print(f"Basic probe for Windows host: {poll_address or host} (resolved: {host})")
-        info['ips'] = self.sanitize_ip_list(info.get('ips') or [])
-        return self.sanitize_asset_payload(info)
+
+        poller_meta = asset['attributes']['poller']
+        username = (target.get('username') or '').strip()
+        password = target.get('password')
+
+        if not username:
+            message = 'Missing Windows username for target'
+            self.log_to_db('error', f"{message}: {poll_address or host}", poll_address or host)
+            poller_meta['error'] = message
+            poller_meta['collected_at'] = current_timestamp()
+            asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+            return self.sanitize_asset_payload(asset)
+
+        if password in (None, ''):
+            message = 'Missing Windows password for target'
+            self.log_to_db('error', f"{message}: {poll_address or host}", poll_address or host)
+            poller_meta['error'] = message
+            poller_meta['collected_at'] = current_timestamp()
+            asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+            return self.sanitize_asset_payload(asset)
+
+        self.log_to_db('info', f"Probing Windows host {poll_address or host} (resolved: {host})...", poll_address or host)
+
+        def _normalize_bool(value):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in ('true', '1', 'yes', 'y', 'on'):
+                    return True
+                if lowered in ('false', '0', 'no', 'n', 'off'):
+                    return False
+            return None
+
+        collector_target = {
+            'host': host,
+            'username': username,
+            'password': password,
+            'domain': target.get('domain'),
+            'hashes': target.get('hashes'),
+            'kerberos': target.get('kerberos'),
+            'kdc_host': target.get('kdc_host'),
+            'collect_applications': target.get('collect_applications'),
+            'applications_limit': target.get('applications_limit'),
+            'winrm_transport': target.get('winrm_transport'),
+            'winrm_use_ssl': target.get('winrm_use_ssl'),
+            'winrm_validate_cert': target.get('winrm_validate_cert'),
+            'winrm_read_timeout': target.get('winrm_read_timeout'),
+            'winrm_operation_timeout': target.get('winrm_operation_timeout'),
+            'wmi_namespace': target.get('wmi_namespace'),
+        }
+
+        for flag in ('collect_applications', 'winrm_use_ssl', 'winrm_validate_cert', 'kerberos'):
+            value = collector_target.get(flag)
+            parsed = _normalize_bool(value)
+            if parsed is not None:
+                collector_target[flag] = parsed
+            elif isinstance(value, str) and value.strip() == '':
+                collector_target[flag] = None
+
+        for numeric_key in ('applications_limit', 'winrm_read_timeout', 'winrm_operation_timeout'):
+            value = collector_target.get(numeric_key)
+            if value is None or value == '':
+                collector_target[numeric_key] = None
+                continue
+            try:
+                collector_target[numeric_key] = int(value)
+            except (TypeError, ValueError):
+                self.log_to_db('warning', f"Invalid value '{value}' for {numeric_key} on {poll_address or host}", poll_address or host)
+                collector_target[numeric_key] = None
+
+        transport_value = collector_target.get('winrm_transport')
+        if isinstance(transport_value, str):
+            trimmed = transport_value.strip()
+            collector_target['winrm_transport'] = trimmed.lower() if trimmed else None
+
+        for text_key in ('domain', 'hashes', 'kdc_host', 'wmi_namespace'):
+            value = collector_target.get(text_key)
+            if isinstance(value, str) and value.strip() == '':
+                collector_target[text_key] = None
+
+        port_value = target.get('port')
+        if port_value:
+            try:
+                port_int = int(port_value)
+                collector_target['winrm_port'] = port_int
+                # Auto-set SSL based on common ports if not supplied
+                if collector_target.get('winrm_use_ssl') is None:
+                    if port_int in (5986, 443):
+                        collector_target['winrm_use_ssl'] = True
+                    elif port_int in (5985, 80):
+                        collector_target['winrm_use_ssl'] = False
+            except (TypeError, ValueError):
+                self.log_to_db('warning', f"Invalid WinRM port '{port_value}' for {poll_address or host}", poll_address or host)
+
+        try:
+            windows_data = collect_windows_asset(collector_target)
+
+            os_info = windows_data.get('os') or {}
+            if os_info:
+                asset['attributes']['os'] = os_info
+            asset['attributes']['os'].setdefault('family', 'windows')
+            resolved_name = windows_data.get('name')
+            if resolved_name:
+                asset['name'] = resolved_name
+                asset['attributes']['os']['hostname'] = resolved_name
+
+            ips = windows_data.get('ips') or []
+            if ips:
+                asset['ips'] = self.sanitize_ip_list(ips)
+
+            mac = windows_data.get('mac')
+            if mac:
+                asset['mac'] = mac
+
+            hardware = windows_data.get('hardware')
+            if hardware:
+                asset['attributes']['hardware'] = hardware
+
+            network = windows_data.get('network')
+            if network:
+                asset['attributes']['network'] = self.sanitize_network_info(network)
+
+            metrics = windows_data.get('metrics')
+            if metrics:
+                asset['attributes']['metrics'] = metrics
+
+            applications = windows_data.get('applications')
+            if applications:
+                asset['attributes']['apps'] = applications
+
+            poller_meta['source'] = windows_data.get('probe_source')
+            warnings = windows_data.get('warnings')
+            if warnings:
+                poller_meta['warnings'] = warnings
+
+            self.log_to_db('success', f"Windows probe succeeded for {poll_address or host}", poll_address or host)
+
+        except WindowsProbeError as exc:
+            message = f"Windows probe error: {exc}"
+            self.log_to_db('error', message, poll_address or host)
+            poller_meta['error'] = str(exc)
+        except Exception as exc:
+            message = f"Windows probe failure: {exc}"
+            self.log_to_db('error', message, poll_address or host)
+            poller_meta['error'] = message
+
+        poller_meta['collected_at'] = current_timestamp()
+        asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+        return self.sanitize_asset_payload(asset)
     
     def push_update(self, asset, online=True):
         """Push asset update to API"""
@@ -1322,7 +1471,7 @@ class DatabasePoller:
             # Probe based on poll type
             if poll_type == 'ssh':
                 asset = self.unix_probe(target)
-            elif poll_type == 'wmi':
+            elif poll_type in ('wmi', 'winrm', 'windows'):
                 asset = self.windows_probe(target)
             elif poll_type in ['snmp', 'ping']:
                 # Just check online status for now

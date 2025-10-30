@@ -40,7 +40,7 @@ class AssetController {
   }
 
   public static function get($id) {
-    $asset = self::fetchAssetById($id);
+    $asset = self::fetchAssetById($id, true);
     if (!$asset) {
       http_response_code(404);
       echo json_encode(['error' => 'not_found']);
@@ -49,7 +49,7 @@ class AssetController {
     echo json_encode($asset);
   }
 
-  public static function getByIp($ip = null, $mac = null) {
+  public static function getByIp($ip = null, $mac = null, $includeChanges = false) {
     $ipParam = trim((string)($ip ?? ''));
     $macParam = trim((string)($mac ?? ''));
 
@@ -113,7 +113,7 @@ class AssetController {
 
     $assets = [];
     foreach ($uniqueIds as $assetId) {
-      $asset = self::fetchAssetById($assetId);
+      $asset = self::fetchAssetById($assetId, $includeChanges);
       if ($asset) {
         $assets[] = $asset;
       }
@@ -229,7 +229,7 @@ class AssetController {
     echo json_encode(['ok'=>true]);
   }
 
-  private static function fetchAssetById($id) {
+  private static function fetchAssetById($id, $includeChanges = true) {
     if (!$id) {
       return null;
     }
@@ -252,7 +252,9 @@ class AssetController {
     } catch (Exception $e) {
       $asset['custom_fields'] = [];
     }
-    $asset['changes'] = self::changes($id);
+    if ($includeChanges) {
+      $asset['changes'] = self::changes($id);
+    }
     return $asset;
   }
 

@@ -720,4 +720,3 @@ def _parse_install_date(value: Any) -> Optional[str]:
     except Exception:
         return None
     return None
-```} 

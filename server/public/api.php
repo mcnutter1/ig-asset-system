@@ -61,7 +61,13 @@ switch ($action) {
     require_login(); require_role('user');
     $ip = $_GET['ip'] ?? null;
     $mac = $_GET['mac'] ?? null;
-    AssetController::getByIp($ip, $mac);
+    $includeChangesParam = $_GET['include_changes'] ?? ($_GET['includeChanges'] ?? null);
+    $includeChanges = false;
+    if ($includeChangesParam !== null) {
+      $value = strtolower(trim((string)$includeChangesParam));
+      $includeChanges = in_array($value, ['1', 'true', 'yes', 'on'], true);
+    }
+    AssetController::getByIp($ip, $mac, $includeChanges);
     break;
 
   case 'asset_create':

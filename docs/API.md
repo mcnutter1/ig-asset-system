@@ -10,6 +10,8 @@ Base: `/api.php?action=...`
 ## Assets
 - `GET action=assets&q=<search>`
 - `GET action=asset_get&id=<uuid>`
+- `GET action=asset_get_by_ip&ip=<addr>&mac=<mac>&include_changes=1`
+  - Look up assets by IP and/or MAC address. Set `include_changes` to `1`, `true`, `yes`, or `on` to include recent change history in the response; by default change records are omitted to keep the payload small.
 - `POST action=asset_create` body: `{ name, type, mac, owner_user_id, ips:[], attributes:{} }`
 - `POST action=asset_update` body: `{ id, ...fields }`
 - `DELETE action=asset_delete&id=<uuid>`
