@@ -13,6 +13,10 @@ windows:
   - host: winhost.local
     username: Administrator
     password: "P@ssw0rd"
+    domain: CORP             # optional
+    winrm_use_ssl: false     # optional, defaults to false
+    winrm_transport: ntlm    # optional: ntlm, kerberos, credssp
+    applications_limit: 150  # optional cap for installed app inventory
 api:
   base_url: "http://azre-itassets1.corp.inovagenix.com/api.php"
   api_key: "POLLR_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
