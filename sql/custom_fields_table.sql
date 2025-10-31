@@ -43,4 +43,3 @@ INSERT IGNORE INTO custom_fields (name, label, field_type, is_required, applies_
 ('notes', 'Notes', 'textarea', FALSE, NULL, 80, 'Additional notes about this asset');
 
 -- Add sample select options for department
-UPDATE custom_fields SET select_options = JSON_ARRAY('IT', 'HR', 'Finance', 'Sales', 'Marketing', 'Operations', 'Executive') WHERE name = 'department';

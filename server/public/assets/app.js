@@ -71,7 +71,7 @@ const assetColumnOrder = ['name','type','ips','mac','owner','status','last_seen'
 const defaultAssetTypes = [
   'server',
   'workstation',
-  'network-device',
+  'network',
   'printer',
   'mobile',
   'iot',
