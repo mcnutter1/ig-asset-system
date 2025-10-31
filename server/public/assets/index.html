@@ -155,6 +155,7 @@
                     <select id="asset-poll-type">
                       <option value="ping">Ping (Online Check Only)</option>
                       <option value="ssh">SSH (Linux/Unix)</option>
+                      <option value="ssh_cisco">SSH (Cisco IOS)</option>
                       <option value="wmi">WMI (Windows)</option>
                       <option value="snmp">SNMP</option>
                     </select>
@@ -172,6 +173,12 @@
                     <input type="password" id="asset-poll-password" placeholder="Password">
                   </label>
                 </div>
+
+                <label id="asset-poll-enable-password-wrapper" style="display: none;">
+                  Enable Password (Cisco)
+                  <input type="password" id="asset-poll-enable-password" placeholder="Enable password">
+                  <small>Optional enable secret for Cisco devices requiring privileged commands.</small>
+                </label>
               </details>
 
               <div id="custom-fields-container"></div>

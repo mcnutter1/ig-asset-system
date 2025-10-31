@@ -157,7 +157,7 @@ class AssetController {
       }
     }
 
-    $stmt = $pdo->prepare("INSERT INTO assets (id,name,type,mac,poll_address,owner_user_id,source,poll_enabled,poll_type,poll_username,poll_password,poll_port) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    $stmt = $pdo->prepare("INSERT INTO assets (id,name,type,mac,poll_address,owner_user_id,source,poll_enabled,poll_type,poll_username,poll_password,poll_port,poll_enable_password) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
       $id,
       $data['name'] ?? 'Unnamed',
@@ -170,7 +170,8 @@ class AssetController {
       $data['poll_type'] ?? 'ping',
       $data['poll_username'] ?? null,
       $data['poll_password'] ?? null,
-      $data['poll_port'] ?? null
+      $data['poll_port'] ?? null,
+      $data['poll_enable_password'] ?? null
     ]);
     if (!empty($data['ips'])) self::set_ips($id, $data['ips'], $actor);
     if (!empty($data['attributes'])) self::set_attributes($id, $data['attributes'], $actor);
@@ -185,7 +186,7 @@ class AssetController {
     $old = $stmt->fetch();
     if (!$old) { http_response_code(404); echo json_encode(['error'=>'not_found']); return; }
 
-    $fields = ['name','type','mac','poll_address','owner_user_id','online_status','last_seen','poll_enabled','poll_type','poll_username','poll_password','poll_port'];
+  $fields = ['name','type','mac','poll_address','owner_user_id','online_status','last_seen','poll_enabled','poll_type','poll_username','poll_password','poll_port','poll_enable_password'];
 
     if (array_key_exists('poll_address', $data)) {
       $pollAddress = trim((string)$data['poll_address']);

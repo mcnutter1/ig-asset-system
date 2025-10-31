@@ -64,6 +64,16 @@ const getStatusColor = (status) => {
   return '#64748b';
 };
 
+const pollTypeRequiresEnablePassword = (type) => (type || '').toLowerCase() === 'ssh_cisco';
+
+const updateEnablePasswordVisibility = () => {
+  const pollTypeField = el('#asset-poll-type');
+  const wrapper = el('#asset-poll-enable-password-wrapper');
+  if (!pollTypeField || !wrapper) return;
+  const show = pollTypeRequiresEnablePassword(pollTypeField.value);
+  wrapper.style.display = show ? 'block' : 'none';
+};
+
 const defaultAssetColumns = ['name','type','ips','mac','owner','status','last_seen'];
 const allAssetColumnKeys = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
 const assetColumnOrder = ['name','type','ips','mac','owner','status','last_seen','source','created_at','updated_at'];
@@ -1270,6 +1280,25 @@ const loadAssets = () => {
 const renderCustomFieldsInModal = (assetType, customFieldValues = []) => {
   const container = el('#custom-fields-container');
   if (!container) return;
+
+  const valuesById = new Map();
+  if (Array.isArray(customFieldValues)) {
+    customFieldValues.forEach(field => {
+      if (!field) return;
+      const key = String(field.id ?? field.field_id ?? '');
+      if (key) {
+        valuesById.set(key, field);
+      }
+    });
+  } else if (customFieldValues && typeof customFieldValues === 'object') {
+    Object.values(customFieldValues).forEach(field => {
+      if (!field) return;
+      const key = String(field.id ?? field.field_id ?? '');
+      if (key) {
+        valuesById.set(key, field);
+      }
+    });
+  }
   
   // Get fields applicable to this asset type
   api(`custom_fields_for_type&type=${assetType || 'unknown'}`).then(fields => {
@@ -1279,9 +1308,8 @@ const renderCustomFieldsInModal = (assetType, customFieldValues = []) => {
     }
     
     container.innerHTML = '<hr><h4 style="margin-top: 15px;">Custom Fields</h4>' + fields.map(field => {
-      // Find existing value for this field
-      const fieldValue = customFieldValues.find(f => f.id === field.id);
-      const value = fieldValue ? fieldValue.value : (field.default_value || '');
+      const existing = valuesById.get(String(field.id));
+      const value = existing && existing.value !== undefined ? existing.value : (field.default_value || '');
       const required = field.is_required ? 'required' : '';
   const star = field.is_required ? '<span style="color: var(--accent-red);">*</span>' : '';
       
@@ -1378,11 +1406,15 @@ const viewAsset = (id) => {
     
     // Build custom fields display
     let customFieldsHtml = '';
-    if (a.custom_fields && a.custom_fields.length > 0) {
-      const fieldsWithValues = a.custom_fields.filter(f => f.value);
+    const customFieldsArray = Array.isArray(a.custom_fields)
+      ? a.custom_fields
+      : (a.custom_fields && typeof a.custom_fields === 'object' ? Object.values(a.custom_fields) : []);
+    if (customFieldsArray.length > 0) {
+      const fieldsWithValues = customFieldsArray.filter(f => f && f.value !== undefined && f.value !== null && f.value !== '');
       if (fieldsWithValues.length > 0) {
         customFieldsHtml = '<hr><h4>Custom Fields</h4>';
         fieldsWithValues.forEach(field => {
+          if (!field) return;
           let displayValue = field.value;
           if (field.field_type === 'checkbox') {
             displayValue = (field.value === 'true' || field.value === '1') ? '✓ Yes' : '✗ No';
@@ -1446,6 +1478,8 @@ const editAsset = (id) => {
       el('#asset-poll-username').value = a.poll_username || '';
       el('#asset-poll-password').value = a.poll_password || '';
       el('#asset-poll-port').value = a.poll_port || '';
+    el('#asset-poll-enable-password').value = a.poll_enable_password || '';
+    updateEnablePasswordVisibility();
       
       // Load custom fields for this asset type
       renderCustomFieldsInModal(a.type, a.custom_fields || []);
@@ -1542,6 +1576,8 @@ const setupAllHandlers = () => {
     el('#asset-poll-username').value = '';
     el('#asset-poll-password').value = '';
     el('#asset-poll-port').value = '';
+    el('#asset-poll-enable-password').value = '';
+    updateEnablePasswordVisibility();
     el('#modal-title').textContent = 'Add Asset';
     // Load custom fields for new asset
     renderCustomFieldsInModal('', []);
@@ -1558,6 +1594,12 @@ const setupAllHandlers = () => {
       }
     };
   }
+
+  const pollTypeSelect = el('#asset-poll-type');
+  if (pollTypeSelect) {
+    pollTypeSelect.addEventListener('change', updateEnablePasswordVisibility);
+  }
+  updateEnablePasswordVisibility();
 
   const assetForm = el('#asset-form');
   if (assetForm) {
@@ -1582,6 +1624,7 @@ const setupAllHandlers = () => {
       }
 
       const ownerValue = el('#asset-owner').value;
+      const enablePassword = el('#asset-poll-enable-password').value;
       const data = {
         name: el('#asset-name').value,
         type: el('#asset-type').value,
@@ -1594,7 +1637,8 @@ const setupAllHandlers = () => {
         poll_type: el('#asset-poll-type').value,
         poll_username: el('#asset-poll-username').value || null,
         poll_password: el('#asset-poll-password').value || null,
-        poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null
+        poll_port: el('#asset-poll-port').value ? parseInt(el('#asset-poll-port').value) : null,
+        poll_enable_password: enablePassword !== '' ? enablePassword : null
       };
 
       if (id) {

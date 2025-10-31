@@ -24,3 +24,10 @@
 - Configure Windows credentials in `poller/config.yml`; optional keys such as `domain`, `winrm_transport`, `winrm_use_ssl`, `applications_limit`, and `collect_applications` fine-tune authentication and inventory breadth. Leaving these fields empty falls back to safe defaults (NTLM and CredSSP try 5985 first, then 5986 with TLS; Kerberos honours the same order) with 30s/20s timeouts, and setting `collect_applications: false` now skips software enumeration entirely.
 - Results are merged into the standard asset payload so existing API/UX surfaces immediately benefit from richer Windows telemetry.
 - For ad-hoc validation, run `python poller/manual_windows_probe.py --pretty --host <host> --username <user> --password <pass>` (optionally seeding values from `poller/config.yml`) to exercise the collector outside the main poller loop.
+
+## Cisco Polling
+
+- Network gear can now be polled with `poll_type = ssh_cisco`, leveraging the dedicated `poller/cisco_collectors.py` workflow.
+- The collector establishes an SSH session, disables paging, optionally enters enable mode, and runs a curated set of `show` commands to capture platform details, modules, and interface status/description data.
+- Store the primary SSH credential in `poll_username`/`poll_password` and supply a `poll_enable_password` when the device requires `enable` to access privileged commands. Devices that grant the login account sufficient rights can leave the enable password blank.
+- Results flow through the sanitization pipeline and land in the same asset schema (interfaces, IPs, MACs, chassis identity) so downstream consumers do not require special handling.

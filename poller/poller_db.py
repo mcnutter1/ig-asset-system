@@ -19,6 +19,7 @@ import ipaddress
 import copy
 import hashlib
 from windows_collectors import collect_windows_asset, WindowsProbeError
+from cisco_collectors import collect_cisco_asset, CiscoProbeError
 try:
     import dns.resolver as dns_resolver
 except ImportError:  # pragma: no cover - optional dependency
@@ -1056,12 +1057,12 @@ class DatabasePoller:
             cursor.execute("""
                 SELECT 
                     a.id, a.name, a.type, a.mac, a.poll_address,
-                    a.poll_type, a.poll_username, a.poll_password, a.poll_port,
+                    a.poll_type, a.poll_username, a.poll_password, a.poll_port, a.poll_enable_password,
                     GROUP_CONCAT(ai.ip SEPARATOR ',') as ips
                 FROM assets a
                 LEFT JOIN asset_ips ai ON a.id = ai.asset_id
                 WHERE a.poll_enabled = TRUE
-                GROUP BY a.id, a.name, a.type, a.mac, a.poll_address, a.poll_type, a.poll_username, a.poll_password, a.poll_port
+                GROUP BY a.id, a.name, a.type, a.mac, a.poll_address, a.poll_type, a.poll_username, a.poll_password, a.poll_port, a.poll_enable_password
             """)
             
             assets = cursor.fetchall()
@@ -1101,7 +1102,8 @@ class DatabasePoller:
                     'username': asset['poll_username'] or '',
                     'password': asset['poll_password'] or '',
                     'port': asset['poll_port'],
-                    'device_type': asset['type']
+                    'device_type': asset['type'],
+                    'enable_password': asset.get('poll_enable_password')
                 }
                 targets.append(target)
                 
@@ -1409,6 +1411,107 @@ class DatabasePoller:
         poller_meta['collected_at'] = current_timestamp()
         asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
         return self.sanitize_asset_payload(asset)
+
+    def cisco_probe(self, target):
+        """Probe Cisco network devices over SSH."""
+        resolved_host = target.get('resolved_host') or target.get('host')
+        poll_address = target.get('poll_address') or target.get('host_display') or resolved_host
+        host = resolved_host or poll_address
+
+        asset = {
+            "id": target.get('asset_id'),
+            "name": poll_address or host,
+            "type": target.get('device_type') or 'network',
+            "ips": [resolved_host] if resolved_host else ([poll_address] if poll_address else []),
+            "attributes": {
+                "os": {"family": "network", "vendor": "Cisco"},
+                "poller": {}
+            },
+            "mac": None
+        }
+
+        poller_meta = asset['attributes']['poller']
+        username = (target.get('username') or '').strip()
+        password = target.get('password')
+
+        if not username:
+            message = 'Missing SSH username for Cisco target'
+            self.log_to_db('error', f"{message}: {poll_address or host}", poll_address or host)
+            poller_meta['error'] = message
+            poller_meta['collected_at'] = current_timestamp()
+            asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+            return self.sanitize_asset_payload(asset)
+
+        if password in (None, ''):
+            message = 'Missing SSH password for Cisco target'
+            self.log_to_db('error', f"{message}: {poll_address or host}", poll_address or host)
+            poller_meta['error'] = message
+            poller_meta['collected_at'] = current_timestamp()
+            asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+            return self.sanitize_asset_payload(asset)
+
+        self.log_to_db('info', f"Probing Cisco host {poll_address or host} (resolved: {host})...", poll_address or host)
+
+        collector_target = {
+            'host': host,
+            'host_display': poll_address or host,
+            'username': username,
+            'password': password,
+            'enable_password': target.get('enable_password'),
+            'port': target.get('port') or 22,
+            'timeout': self.poller_config.get('timeout', 10)
+        }
+
+        try:
+            cisco_data = collect_cisco_asset(collector_target)
+
+            os_info = cisco_data.get('os') or {}
+            if os_info:
+                asset['attributes']['os'] = os_info
+            resolved_name = cisco_data.get('name')
+            if resolved_name:
+                asset['name'] = resolved_name
+                asset['attributes']['os']['hostname'] = resolved_name
+
+            ips = cisco_data.get('ips') or []
+            if ips:
+                asset['ips'] = self.sanitize_ip_list(ips)
+
+            mac = cisco_data.get('mac')
+            if mac:
+                asset['mac'] = mac
+
+            hardware = cisco_data.get('hardware')
+            if hardware:
+                asset['attributes']['hardware'] = hardware
+
+            network = cisco_data.get('network')
+            if network:
+                asset['attributes']['network'] = self.sanitize_network_info(network)
+
+            metrics = cisco_data.get('metrics')
+            if metrics:
+                asset['attributes']['metrics'] = metrics
+
+            warnings = cisco_data.get('warnings')
+            if warnings:
+                poller_meta['warnings'] = warnings
+
+            poller_meta['source'] = cisco_data.get('probe_source', 'cisco-ssh')
+            self.log_to_db('success', f"Cisco probe succeeded for {poll_address or host}", poll_address or host)
+
+        except CiscoProbeError as exc:
+            message = f"Cisco probe error: {exc}"
+            self.log_to_db('error', message, poll_address or host)
+            poller_meta['error'] = str(exc)
+        except Exception as exc:
+            message = f"Cisco probe failure: {exc}"
+            self.log_to_db('error', message, poll_address or host)
+            poller_meta['error'] = message
+
+        poller_meta['collected_at'] = current_timestamp()
+        asset['ips'] = self.sanitize_ip_list(asset.get('ips') or [])
+        return self.sanitize_asset_payload(asset)
     
     def push_update(self, asset, online=True):
         """Push asset update to API"""
@@ -1471,6 +1574,8 @@ class DatabasePoller:
             # Probe based on poll type
             if poll_type == 'ssh':
                 asset = self.unix_probe(target)
+            elif poll_type in ('ssh_cisco', 'cisco', 'ssh-cisco'):
+                asset = self.cisco_probe(target)
             elif poll_type in ('wmi', 'winrm', 'windows'):
                 asset = self.windows_probe(target)
             elif poll_type in ['snmp', 'ping']:
