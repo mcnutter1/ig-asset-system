@@ -32,5 +32,6 @@
 - Interfaces are enumerated with both IPv4 and IPv6 reachability (`show ip interface brief vrf all` plus `show ipv6 interface brief`), so dual-stack addressing is preserved in the asset payload alongside per-interface status.
 - VRF membership is captured from the CLI output; each interface is tagged with its VRF (where applicable) and the normalized response includes a `network.vrfs[]` summary of route distinguishers and attached interfaces.
 - All collected addresses are filtered through the sanitization manager before delivery, ensuring link-local, loopback, or otherwise excluded ranges never reach the API payload.
+- Sanitization now also validates that every recorded address parses as a proper IPv4 or IPv6 literal, preventing CLI prompts or malformed values from leaking into asset IP lists.
 - Store the primary SSH credential in `poll_username`/`poll_password` and supply a `poll_enable_password` when the device requires `enable` to access privileged commands. Devices that grant the login account sufficient rights can leave the enable password blank.
 - Results flow through the sanitization pipeline and land in the same asset schema (interfaces, IPs, MACs, chassis identity) so downstream consumers do not require special handling.

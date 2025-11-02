@@ -8,6 +8,7 @@ making it controllable from the web UI.
 
 import time
 import json
+import ipaddress
 import requests
 import paramiko
 import socket
@@ -668,6 +669,15 @@ class SanitizationManager:
             filtered.append(value)
         return filtered
 
+    def is_valid_ip_literal(self, value):
+        if not value or not isinstance(value, str):
+            return False
+        try:
+            ipaddress.ip_address(value)
+            return True
+        except ValueError:
+            return False
+
     def sanitize_interfaces(self, interfaces):
         if not isinstance(interfaces, list):
             return interfaces
@@ -675,9 +685,9 @@ class SanitizationManager:
         for iface in interfaces:
             if isinstance(iface, dict):
                 updated = dict(iface)
-                ipv4_addresses = self.filter_interface_addresses(iface.get('ipv4_addresses', []))
-                ipv6_addresses = self.filter_interface_addresses(iface.get('ipv6_addresses', []))
-                addresses = self.filter_interface_addresses(iface.get('addresses', []))
+                ipv4_addresses = [addr for addr in self.filter_interface_addresses(iface.get('ipv4_addresses', [])) if self.is_valid_ip_literal(addr)]
+                ipv6_addresses = [addr for addr in self.filter_interface_addresses(iface.get('ipv6_addresses', [])) if self.is_valid_ip_literal(addr)]
+                addresses = [addr for addr in self.filter_interface_addresses(iface.get('addresses', [])) if self.is_valid_ip_literal(addr)]
 
                 if not addresses:
                     merged = []
@@ -698,7 +708,7 @@ class SanitizationManager:
         if not isinstance(info, dict):
             return info or {}
         sanitized = dict(info)
-        sanitized['addresses'] = self.filter_summary_ips(info.get('addresses', []))
+        sanitized['addresses'] = [addr for addr in self.filter_summary_ips(info.get('addresses', [])) if self.is_valid_ip_literal(addr)]
         sanitized['interfaces'] = self.sanitize_interfaces(info.get('interfaces', []))
         return sanitized
 
