@@ -202,8 +202,11 @@ def _run_command(channel: paramiko.Channel, command: str, timeout: int, allow_fa
     time.sleep(0.1)
     raw = _read_until_prompt(channel, timeout)
     output = _strip_command_output(command, raw)
-    if not allow_failure and output.strip().startswith("%"):
-        raise CiscoProbeError(f"Command '{command}' failed: {output.strip()}")
+    cleaned = output.strip()
+    if cleaned.startswith("%") or "Invalid input" in cleaned or "Ambiguous" in cleaned:
+        if allow_failure:
+            return ""
+        raise CiscoProbeError(f"Command '{command}' failed: {cleaned}")
     return output
 
 
@@ -348,15 +351,26 @@ def _parse_interface_brief(output: str) -> List[Dict[str, Any]]:
         stripped = line.strip()
         if not stripped or stripped.lower().startswith("interface"):
             continue
+        # Skip CLI error markers such as "% Invalid input" or caret markers
+        if stripped.startswith("%") or "^" in stripped:
+            continue
         match = _INTERFACE_BRIEF_RE.match(stripped)
         if not match:
-            continue
-
-        name = match.group("iface")
-        ip = match.group("ip")
-        status = match.group("status").strip()
-        protocol = match.group("protocol").strip()
-        vrf = match.group("vrf")
+            # Fallback parser for legacy formats without VRF column
+            parts = stripped.split()
+            if len(parts) < 6:
+                continue
+            name = parts[0]
+            ip = parts[1]
+            status = " ".join(parts[4:-1]) if len(parts) > 5 else parts[4]
+            protocol = parts[-1]
+            vrf = parts[5] if len(parts) > 6 else None
+        else:
+            name = match.group("iface")
+            ip = match.group("ip")
+            status = match.group("status").strip()
+            protocol = match.group("protocol").strip()
+            vrf = match.group("vrf")
 
         entry: Dict[str, Any] = {
             "name": name,
@@ -391,8 +405,11 @@ def _parse_ipv6_interface_brief(output: str) -> Dict[str, Dict[str, Any]]:
         line = raw_line.rstrip()
         if not line:
             continue
+        stripped = line.strip()
+        if _PROMPT_RE.match(stripped) or stripped.startswith("%"):
+            continue
 
-        header = _IPV6_BRIEF_HEADER_RE.match(line.strip())
+        header = _IPV6_BRIEF_HEADER_RE.match(stripped)
         if header:
             iface = header.group("iface")
             state = header.group("state")
@@ -410,11 +427,15 @@ def _parse_ipv6_interface_brief(output: str) -> Dict[str, Dict[str, Any]]:
         if current_iface is None:
             continue
 
-        addr = line.strip()
+        addr = stripped
         if not addr or addr.lower() == "unassigned":
             continue
 
         addr_token = addr.split()[0]
+        if _PROMPT_RE.match(addr_token):
+            continue
+        if addr_token.startswith("%"):
+            continue
         iface_entry = results[current_iface]
         if addr_token not in iface_entry["addresses"]:
             iface_entry["addresses"].append(addr_token)
