@@ -159,6 +159,8 @@ const formatChangeFieldLabel = (field) => {
     .join(' ');
 };
 
+const ignoredChangeFields = new Set(['last_seen', 'updated_at', 'created_at']);
+
 const renderChangeValue = (field, value) => {
   const sensitiveFields = new Set(['poll_password', 'poll_enable_password']);
   if (sensitiveFields.has(field)) {
@@ -258,10 +260,17 @@ const renderDiffValues = (field, oldValue, newValue) => {
 };
 
 const renderChangeHistory = (changes = []) => {
-  const safeChanges = Array.isArray(changes) ? changes : [];
-  const titleBlock = '<hr><h4>Change History</h4>';
+  const safeChanges = (Array.isArray(changes) ? changes : []).filter(change => change && !ignoredChangeFields.has(change.field));
   if (!safeChanges.length) {
-    return `<div class="change-history">${titleBlock}<p class="change-empty-state">No changes recorded yet.</p></div>`;
+    return `
+      <section class="modal-section change-history">
+        <div class="modal-section-header">
+          <h4>Change History</h4>
+          <span class="tw-text-muted tw-text-xs">No changes recorded yet</span>
+        </div>
+        <p class="change-empty-state">We&apos;ll display field-level updates here as soon as something changes.</p>
+      </section>
+    `;
   }
 
   const items = safeChanges.map(change => {
@@ -297,7 +306,15 @@ const renderChangeHistory = (changes = []) => {
     `;
   }).join('');
 
-  return `<div class="change-history">${titleBlock}<div class="change-list">${items}</div></div>`;
+  return `
+    <section class="modal-section change-history">
+      <div class="modal-section-header">
+        <h4>Change History</h4>
+        <span class="tw-text-muted tw-text-xs">${safeChanges.length} entr${safeChanges.length === 1 ? 'y' : 'ies'}</span>
+      </div>
+      <div class="change-list">${items}</div>
+    </section>
+  `;
 };
 
 const getStatusColor = (status) => {
@@ -1683,8 +1700,11 @@ const viewAsset = (id) => {
       }).join('');
 
       customFieldsSection = `
-        <section class="asset-section">
-          <h4>Custom Fields</h4>
+        <section class="modal-section">
+          <div class="modal-section-header">
+            <h4>Custom Fields</h4>
+            <span class="tw-text-muted tw-text-xs">${fieldsWithValues.length} field${fieldsWithValues.length === 1 ? '' : 's'}</span>
+          </div>
           <div class="asset-field-list">
             ${items}
           </div>
@@ -1694,43 +1714,52 @@ const viewAsset = (id) => {
 
     const attributesSection = hasAttributes
       ? `
-        <section class="asset-section">
-          <h4>Attributes</h4>
+        <section class="modal-section">
+          <div class="modal-section-header">
+            <h4>Attributes</h4>
+            <span class="tw-text-muted tw-text-xs">Raw collector payload</span>
+          </div>
           ${renderCollapsibleJson(a.attributes)}
         </section>
       `
       : '';
 
     const summaryHtml = `
-      <div class="asset-summary-grid">
-        <div class="asset-summary-card">
-          <h4>Identity</h4>
-          <div class="asset-field-list">
-            ${renderFieldRow('Type', escapeHtml(a.type || '-'))}
-            ${renderFieldRow('Owner', escapeHtml(ownerName))}
-            ${renderFieldRow('Source', escapeHtml(a.source || 'manual'))}
+      <section class="modal-section">
+        <div class="modal-section-header">
+          <h4>Asset Overview</h4>
+          <span class="tw-text-muted tw-text-xs">Refreshed ${escapeHtml(formatDateTime(a.updated_at))}</span>
+        </div>
+        <div class="asset-summary-grid">
+          <div class="asset-summary-card">
+            <h5>Identity</h5>
+            <div class="asset-field-list">
+              ${renderFieldRow('Type', escapeHtml(a.type || '-'))}
+              ${renderFieldRow('Owner', escapeHtml(ownerName))}
+              ${renderFieldRow('Source', escapeHtml(a.source || 'manual'))}
+            </div>
+          </div>
+          <div class="asset-summary-card">
+            <h5>Network</h5>
+            <div class="asset-field-list">
+              ${renderFieldRow('Polling Address', pollAddressHtml)}
+              ${renderFieldRow('IP Addresses', renderTagPills(ipItems))}
+              ${renderFieldRow('MAC Address', `<span class="monospace">${escapeHtml(a.mac || '-')}</span>`)}
+            </div>
+          </div>
+          <div class="asset-summary-card">
+            <h5>Telemetry</h5>
+            <div class="asset-field-list">
+              ${renderFieldRow('Status', statusLabel)}
+              ${renderFieldRow('Last Seen', escapeHtml(formatDateTime(a.last_seen)))}
+              ${renderFieldRow('Poll Type', escapeHtml(a.poll_type || '-'))}
+              ${renderFieldRow('Polling Enabled', a.poll_enabled ? '<span class="tag-pill tag-pill-success">Enabled</span>' : '<span class="tag-pill tag-pill-muted">Disabled</span>')}
+              ${renderFieldRow('Created', escapeHtml(formatDateTime(a.created_at)))}
+              ${renderFieldRow('Updated', escapeHtml(formatDateTime(a.updated_at)))}
+            </div>
           </div>
         </div>
-        <div class="asset-summary-card">
-          <h4>Network</h4>
-          <div class="asset-field-list">
-            ${renderFieldRow('Polling Address', pollAddressHtml)}
-            ${renderFieldRow('IP Addresses', renderTagPills(ipItems))}
-            ${renderFieldRow('MAC Address', `<span class="monospace">${escapeHtml(a.mac || '-')}</span>`)}
-          </div>
-        </div>
-        <div class="asset-summary-card">
-          <h4>Status &amp; Polling</h4>
-          <div class="asset-field-list">
-            ${renderFieldRow('Status', statusLabel)}
-            ${renderFieldRow('Last Seen', escapeHtml(formatDateTime(a.last_seen)))}
-            ${renderFieldRow('Poll Type', escapeHtml(a.poll_type || '-'))}
-            ${renderFieldRow('Polling Enabled', a.poll_enabled ? '<span class="tag-pill tag-pill-success">Enabled</span>' : '<span class="tag-pill tag-pill-muted">Disabled</span>')}
-            ${renderFieldRow('Created', escapeHtml(formatDateTime(a.created_at)))}
-            ${renderFieldRow('Updated', escapeHtml(formatDateTime(a.updated_at)))}
-          </div>
-        </div>
-      </div>
+      </section>
     `;
 
     body.innerHTML = `

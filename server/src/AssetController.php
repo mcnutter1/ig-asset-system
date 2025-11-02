@@ -399,7 +399,7 @@ class AssetController {
 
   private static function changes($id) {
     $pdo = DB::conn();
-    $stmt = $pdo->prepare("SELECT actor, source, field, old_value, new_value, changed_at FROM changes WHERE asset_id=? ORDER BY changed_at DESC LIMIT 200");
+  $stmt = $pdo->prepare("SELECT actor, source, field, old_value, new_value, changed_at FROM changes WHERE asset_id=? AND field NOT IN ('last_seen','updated_at','created_at') ORDER BY changed_at DESC LIMIT 200");
     $stmt->execute([$id]);
     return $stmt->fetchAll();
   }
