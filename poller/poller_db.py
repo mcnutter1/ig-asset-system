@@ -644,7 +644,7 @@ class SanitizationManager:
         seen = set()
         for value in addresses:
             literal = normalize_ip_literal(value)
-            if not literal or self.should_exclude(literal):
+            if not literal or not self.is_valid_ip_literal(literal) or self.should_exclude(literal):
                 continue
             marker = literal.lower()
             if marker in seen:
@@ -660,13 +660,13 @@ class SanitizationManager:
         seen = set()
         for value in addresses:
             literal = normalize_ip_literal(value)
-            if not literal or self.should_exclude(literal):
+            if not literal or not self.is_valid_ip_literal(literal) or self.should_exclude(literal):
                 continue
             marker = literal.lower()
             if marker in seen:
                 continue
             seen.add(marker)
-            filtered.append(value)
+            filtered.append(literal)
         return filtered
 
     def is_valid_ip_literal(self, value):
@@ -1032,8 +1032,22 @@ class DatabasePoller:
 
     def sanitize_ip_list(self, addresses):
         if not self.sanitizer:
-            return addresses or []
-        return self.sanitizer.filter_summary_ips(addresses or [])
+            if not isinstance(addresses, list):
+                return []
+            result = []
+            for value in addresses:
+                literal = normalize_ip_literal(value)
+                if not literal:
+                    continue
+                try:
+                    ipaddress.ip_address(literal)
+                except ValueError:
+                    continue
+                if literal not in result:
+                    result.append(literal)
+            return result
+        sanitized = self.sanitizer.filter_summary_ips(addresses or [])
+        return [ip for ip in sanitized if self.sanitizer.is_valid_ip_literal(ip)]
 
     def sanitize_network_info(self, info):
         if not self.sanitizer:
