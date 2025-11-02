@@ -17,6 +17,7 @@ Base: `/api.php?action=...`
   - Optional polling fields: `poll_enabled`, `poll_type`, `poll_username`, `poll_password`, `poll_port`, and `poll_enable_password`.
     - Use `poll_type = ssh_cisco` for Cisco IOS-family polling. Provide `poll_enable_password` when the device requires entering privileged EXEC mode (`enable`). Leave it `null` for hosts that allow the primary credential to run show commands directly.
 - Poller-enriched responses expose dual-stack network data: each interface includes `addresses`, `ipv4_addresses`, `ipv6_addresses`, and (when available) `vrf`. The top-level `network.vrfs[]` array summarises defined VRFs with their route distinguishers and member interfaces.
+- Blank string fields are normalized to `null` in asset responses (including `asset_get_by_ip`) to eliminate ambiguity between empty and missing data.
 - `POST action=asset_update` body: `{ id, ...fields }`
 - `DELETE action=asset_delete&id=<uuid>`
 

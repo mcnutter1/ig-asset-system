@@ -256,7 +256,7 @@ class AssetController {
     if ($includeChanges) {
       $asset['changes'] = self::changes($id);
     }
-    return $asset;
+    return self::normalizeEmptyStrings($asset);
   }
 
   private static function ips($id) {
@@ -312,6 +312,25 @@ class AssetController {
     }
 
     return $result;
+  }
+
+  private static function normalizeEmptyStrings($value) {
+    if (is_array($value)) {
+      foreach ($value as $key => $child) {
+        $value[$key] = self::normalizeEmptyStrings($child);
+      }
+      return $value;
+    }
+    if ($value instanceof \stdClass) {
+      foreach ($value as $key => $child) {
+        $value->$key = self::normalizeEmptyStrings($child);
+      }
+      return $value;
+    }
+    if (is_string($value) && trim($value) === '') {
+      return null;
+    }
+    return $value;
   }
 
   private static function set_attributes($id, $attrs, $actor='manual') {
