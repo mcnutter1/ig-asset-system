@@ -57,12 +57,20 @@ class AgentController {
 
     // Accept payload: { asset: { id|name|mac|ips|attributes|owner_user_id|type }, heartbeat: true/false, online_status }
     $asset = $payload['asset'] ?? [];
+    if (!is_array($asset)) {
+      http_response_code(400);
+      echo json_encode(['error' => 'invalid_payload', 'message' => 'Asset payload must be an object']);
+      return;
+    }
     $actor = 'agent';
     $asset_id = $asset['id'] ?? null;
 
+    $currentTimestamp = date('Y-m-d H:i:s');
+    $onlineStatus = ($payload['online_status'] ?? true) ? 'online' : 'offline';
+
     $updateData = [
-      'last_seen' => date('Y-m-d H:i:s'),
-      'online_status' => ($payload['online_status'] ?? true) ? 'online' : 'offline'
+      'last_seen' => $currentTimestamp,
+      'online_status' => $onlineStatus
     ];
 
     if (!empty($asset['mac'])) {
@@ -76,10 +84,68 @@ class AgentController {
       }
     }
 
+    $attributesPayload = null;
+    $attributeArray = [];
     if (isset($asset['attributes']) && (is_array($asset['attributes']) || is_object($asset['attributes']))) {
-      if (!empty((array)$asset['attributes'])) {
-        $updateData['attributes'] = $asset['attributes'];
+      $attributesPayload = $asset['attributes'];
+      $attributeArray = json_decode(json_encode($attributesPayload), true) ?: [];
+    }
+
+    $pollerMeta = $attributeArray['poller'] ?? null;
+    $pollerErrorMessage = null;
+    if (is_array($pollerMeta) && array_key_exists('error', $pollerMeta)) {
+      $pollerErrorMessage = trim((string)$pollerMeta['error']);
+    }
+
+    if ($pollerErrorMessage) {
+      http_response_code(422);
+      echo json_encode([
+        'error' => 'probe_failed',
+        'message' => $pollerErrorMessage ?: 'Poller reported an error and no data was collected',
+        'timestamp' => $currentTimestamp
+      ]);
+      return;
+    }
+
+    $hasSubstantiveAttributes = false;
+    if ($attributeArray) {
+      $nonPollerKeys = array_diff(array_keys($attributeArray), ['poller']);
+      if (!empty($nonPollerKeys)) {
+        $hasSubstantiveAttributes = true;
+      } else {
+        if (is_array($pollerMeta)) {
+          $pollerMetaCopy = $pollerMeta;
+          unset($pollerMetaCopy['collected_at'], $pollerMetaCopy['warnings']);
+          $pollerMetaCopy = array_filter($pollerMetaCopy, function ($value) {
+            if (is_array($value)) {
+              $innerFiltered = array_filter($value, function ($inner) {
+                return $inner !== null && $inner !== '' && $inner !== [];
+              });
+              return !empty($innerFiltered);
+            }
+            return $value !== null && $value !== '';
+          });
+          if (!empty($pollerMetaCopy)) {
+            $hasSubstantiveAttributes = true;
+          }
+        }
       }
+    }
+
+    if ($hasSubstantiveAttributes) {
+      $updateData['attributes'] = $attributesPayload;
+    }
+
+    $hasMeaningfulUpdate = isset($updateData['mac']) || isset($updateData['ips']) || isset($updateData['attributes']) || ($onlineStatus === 'offline');
+
+    if (!$hasMeaningfulUpdate) {
+      http_response_code(422);
+      echo json_encode([
+        'error' => 'empty_update',
+        'message' => 'Probe did not collect any asset changes; update rejected',
+        'timestamp' => $currentTimestamp
+      ]);
+      return;
     }
 
     if ($asset_id) {

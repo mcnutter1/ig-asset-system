@@ -58,6 +58,88 @@ const formatDateTime = (value) => {
   }
 };
 
+const renderFieldRow = (label, valueHtml) => {
+  const safeLabel = escapeHtml(label);
+  const safeValue = valueHtml === null || valueHtml === undefined ? '<span class="change-null">null</span>' : valueHtml;
+  return `
+    <div class="asset-field">
+      <strong>${safeLabel}</strong>
+      <div class="asset-field-value">${safeValue}</div>
+    </div>
+  `;
+};
+
+const renderTagPills = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) {
+    return '<span class="change-empty">-</span>';
+  }
+  return `<div class="tag-pill-group">${items.map(item => `<span class="tag-pill">${escapeHtml(item)}</span>`).join('')}</div>`;
+};
+
+const isObjectLike = (value) => value !== null && typeof value === 'object';
+
+const renderJsonPrimitive = (value) => {
+  if (value === null || value === undefined) {
+    return '<span class="json-primitive json-null">null</span>';
+  }
+  if (typeof value === 'boolean') {
+    return `<span class="json-primitive json-boolean">${value}</span>`;
+  }
+  if (typeof value === 'number') {
+    return `<span class="json-primitive json-number">${value}</span>`;
+  }
+  if (typeof value === 'string') {
+    return `<span class="json-primitive json-string">${escapeHtml(value)}</span>`;
+  }
+  return `<span class="json-primitive json-unknown">${escapeHtml(String(value))}</span>`;
+};
+
+const renderJsonNode = (value, depth = 0, keyLabel = null) => {
+  const openAttr = depth < 1 ? ' open' : '';
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      const keyHtml = keyLabel !== null ? `<span class="json-key">${escapeHtml(keyLabel)}</span>` : '';
+      return `<div class="json-row">${keyHtml}<span class="json-primitive json-empty-array">[]</span></div>`;
+    }
+    const summaryLabel = keyLabel !== null
+      ? `${escapeHtml(keyLabel)} · Array (${value.length})`
+      : `Array (${value.length})`;
+    const children = value
+      .map((item, index) => renderJsonNode(item, depth + 1, `[${index}]`))
+      .join('');
+    return `<details class="json-node json-array"${openAttr}><summary>${summaryLabel}</summary><div class="json-children">${children}</div></details>`;
+  }
+  if (isObjectLike(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      const keyHtml = keyLabel !== null ? `<span class="json-key">${escapeHtml(keyLabel)}</span>` : '';
+      return `<div class="json-row">${keyHtml}<span class="json-primitive json-empty-object">{}</span></div>`;
+    }
+    const summaryLabel = keyLabel !== null
+      ? `${escapeHtml(keyLabel)} · Object (${entries.length})`
+      : `Object (${entries.length})`;
+    const children = entries
+      .map(([childKey, childValue]) => renderJsonNode(childValue, depth + 1, childKey))
+      .join('');
+    return `<details class="json-node json-object"${openAttr}><summary>${summaryLabel}</summary><div class="json-children">${children}</div></details>`;
+  }
+  const valueHtml = renderJsonPrimitive(value);
+  if (keyLabel === null) {
+    return `<div class="json-row"><span class="json-value">${valueHtml}</span></div>`;
+  }
+  return `<div class="json-row"><span class="json-key">${escapeHtml(keyLabel)}</span><span class="json-value">${valueHtml}</span></div>`;
+};
+
+const renderCollapsibleJson = (value) => {
+  if (value === null || value === undefined) {
+    return '<div class="json-tree"><span class="json-primitive json-null">null</span></div>';
+  }
+  if (!isObjectLike(value) && !Array.isArray(value)) {
+    return `<div class="json-tree"><div class="json-row"><span class="json-value">${renderJsonPrimitive(value)}</span></div></div>`;
+  }
+  return `<div class="json-tree">${renderJsonNode(value)}</div>`;
+};
+
 const parseChangeValue = (value) => {
   if (value === null || value === undefined) return null;
   if (typeof value !== 'string') return value;
@@ -88,8 +170,7 @@ const renderChangeValue = (field, value) => {
   }
 
   if (typeof value === 'object') {
-    const pretty = escapeHtml(JSON.stringify(value, null, 2));
-    return `<pre class="change-json">${pretty}</pre>`;
+    return renderCollapsibleJson(value);
   }
 
   if (typeof value === 'boolean') {
@@ -108,6 +189,74 @@ const renderChangeValue = (field, value) => {
   return escapeHtml(str);
 };
 
+const highlightStringDiff = (oldValue, newValue) => {
+  const oldStr = String(oldValue ?? '');
+  const newStr = String(newValue ?? '');
+  if (oldStr === newStr) {
+    const html = escapeHtml(oldStr);
+    return { oldHtml: html, newHtml: html };
+  }
+  let start = 0;
+  const minLength = Math.min(oldStr.length, newStr.length);
+  while (start < minLength && oldStr[start] === newStr[start]) {
+    start++;
+  }
+  let endOld = oldStr.length - 1;
+  let endNew = newStr.length - 1;
+  while (endOld >= start && endNew >= start && oldStr[endOld] === newStr[endNew]) {
+    endOld--;
+    endNew--;
+  }
+  const prefixOld = escapeHtml(oldStr.slice(0, start));
+  const suffixOld = escapeHtml(oldStr.slice(endOld + 1));
+  const midOld = escapeHtml(oldStr.slice(start, endOld + 1));
+  const prefixNew = escapeHtml(newStr.slice(0, start));
+  const suffixNew = escapeHtml(newStr.slice(endNew + 1));
+  const midNew = escapeHtml(newStr.slice(start, endNew + 1));
+
+  return {
+    oldHtml: `${prefixOld}<mark class="change-diff-removed">${midOld}</mark>${suffixOld}`,
+    newHtml: `${prefixNew}<mark class="change-diff-added">${midNew}</mark>${suffixNew}`
+  };
+};
+
+const renderDiffValues = (field, oldValue, newValue) => {
+  const sensitiveFields = new Set(['poll_password', 'poll_enable_password']);
+  if (sensitiveFields.has(field)) {
+    const redacted = '<span class="change-redacted">Hidden for security</span>';
+    return { oldHtml: redacted, newHtml: redacted };
+  }
+
+  const oldIsComplex = isObjectLike(oldValue) || Array.isArray(oldValue);
+  const newIsComplex = isObjectLike(newValue) || Array.isArray(newValue);
+  if (oldIsComplex || newIsComplex) {
+    return {
+      oldHtml: renderCollapsibleJson(oldValue),
+      newHtml: renderCollapsibleJson(newValue)
+    };
+  }
+
+  if (typeof oldValue === 'string' || typeof newValue === 'string') {
+    return highlightStringDiff(oldValue, newValue);
+  }
+
+  if (typeof oldValue === 'number' || typeof newValue === 'number' || typeof oldValue === 'boolean' || typeof newValue === 'boolean') {
+    if (oldValue === newValue) {
+      const html = renderChangeValue(field, oldValue);
+      return { oldHtml: html, newHtml: html };
+    }
+    return {
+      oldHtml: renderChangeValue(field, oldValue),
+      newHtml: renderChangeValue(field, newValue)
+    };
+  }
+
+  return {
+    oldHtml: renderChangeValue(field, oldValue),
+    newHtml: renderChangeValue(field, newValue)
+  };
+};
+
 const renderChangeHistory = (changes = []) => {
   const safeChanges = Array.isArray(changes) ? changes : [];
   const titleBlock = '<hr><h4>Change History</h4>';
@@ -122,8 +271,9 @@ const renderChangeHistory = (changes = []) => {
     const source = change.source ? escapeHtml(change.source) : '';
     const sourceSuffix = source ? ` · via ${source}` : '';
     const timestamp = escapeHtml(formatDateTime(change.changed_at));
-    const oldVal = renderChangeValue(field, parseChangeValue(change.old_value));
-    const newVal = renderChangeValue(field, parseChangeValue(change.new_value));
+    const parsedOld = parseChangeValue(change.old_value);
+    const parsedNew = parseChangeValue(change.new_value);
+    const diffHtml = renderDiffValues(field, parsedOld, parsedNew);
 
     return `
       <div class="change-entry">
@@ -134,13 +284,13 @@ const renderChangeHistory = (changes = []) => {
           <span class="change-time">${timestamp}${sourceSuffix}</span>
         </div>
         <div class="change-values">
-          <div class="change-block">
+          <div class="change-block change-block-old">
             <div class="change-label">Was</div>
-            <div class="change-data">${oldVal}</div>
+            <div class="change-data">${diffHtml.oldHtml}</div>
           </div>
-          <div class="change-block">
+          <div class="change-block change-block-new">
             <div class="change-label">Now</div>
-            <div class="change-data">${newVal}</div>
+            <div class="change-data">${diffHtml.newHtml}</div>
           </div>
         </div>
       </div>
@@ -1491,65 +1641,110 @@ const viewAsset = (id) => {
   console.log('viewAsset called with id:', id);
   api(`asset_get&id=${id}`).then(a => {
     console.log('Asset data:', a);
-    const drawer = el('#drawer');
-    const content = el('#asset-detail');
+    const modal = el('#asset-view-modal');
+    const body = el('#asset-view-body');
+    const title = el('#asset-view-title');
+    if (!modal || !body) {
+      console.warn('Asset view modal not found');
+      return;
+    }
+
     const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
     const ownerName = getOwnerDisplayName(a) || '-';
-    const ipList = Array.isArray(a.ips) ? a.ips.map(x => escapeHtml(x.ip)).filter(Boolean).join(', ') : '';
-    const pollAddress = a.poll_address ? escapeHtml(a.poll_address) : '-';
+    const ipItems = Array.isArray(a.ips) ? a.ips.map(x => x.ip).filter(Boolean) : [];
+    const pollAddressHtml = a.poll_address ? escapeHtml(a.poll_address) : '<span class="change-empty">-</span>';
     const status = a.online_status || 'unknown';
     const statusColor = getStatusColor(status);
   const statusLabel = `<span class="status-indicator" style="--status-color: ${statusColor};">${escapeHtml(status)}</span>`;
     const changeHistoryHtml = renderChangeHistory(a.changes || []);
 
-    // Build custom fields display
-    let customFieldsHtml = '';
     const customFieldsArray = Array.isArray(a.custom_fields)
       ? a.custom_fields
       : (a.custom_fields && typeof a.custom_fields === 'object' ? Object.values(a.custom_fields) : []);
-    if (customFieldsArray.length > 0) {
-      const fieldsWithValues = customFieldsArray.filter(f => f && f.value !== undefined && f.value !== null && f.value !== '');
-      if (fieldsWithValues.length > 0) {
-        customFieldsHtml = '<hr><h4>Custom Fields</h4>';
-        fieldsWithValues.forEach(field => {
-          if (!field) return;
-          let displayValue = field.value;
-          if (field.field_type === 'checkbox') {
-            displayValue = (field.value === 'true' || field.value === '1' || field.value === true) ? '✓ Yes' : '✗ No';
-          }
-          let renderedValue;
-          if (displayValue === null || displayValue === undefined) {
-            renderedValue = '<span class="change-null">null</span>';
-          } else if (typeof displayValue === 'object') {
-            renderedValue = `<pre class="change-json">${escapeHtml(JSON.stringify(displayValue, null, 2))}</pre>`;
-          } else {
-            renderedValue = escapeHtml(String(displayValue));
-          }
-          customFieldsHtml += `<div class="kv"><strong>${escapeHtml(field.label || field.name || 'Field')}:</strong> ${renderedValue}</div>`;
-        });
-      }
+
+    const fieldsWithValues = customFieldsArray.filter(field => field && field.value !== undefined && field.value !== null && field.value !== '');
+
+    let customFieldsSection = '';
+    if (fieldsWithValues.length > 0) {
+      const items = fieldsWithValues.map(field => {
+        let displayValue = field.value;
+        if (field.field_type === 'checkbox') {
+          displayValue = (field.value === 'true' || field.value === '1' || field.value === true) ? '✓ Yes' : '✗ No';
+        }
+        let renderedValue;
+        if (displayValue === null || displayValue === undefined) {
+          renderedValue = '<span class="change-null">null</span>';
+        } else if (typeof displayValue === 'object') {
+          renderedValue = renderCollapsibleJson(displayValue);
+        } else {
+          renderedValue = escapeHtml(String(displayValue));
+        }
+        return renderFieldRow(field.label || field.name || 'Field', renderedValue);
+      }).join('');
+
+      customFieldsSection = `
+        <section class="asset-section">
+          <h4>Custom Fields</h4>
+          <div class="asset-field-list">
+            ${items}
+          </div>
+        </section>
+      `;
     }
 
-    const attributesHtml = hasAttributes
-      ? `<hr><div class="kv"><strong>Attributes:</strong></div><pre>${escapeHtml(JSON.stringify(a.attributes, null, 2))}</pre>`
+    const attributesSection = hasAttributes
+      ? `
+        <section class="asset-section">
+          <h4>Attributes</h4>
+          ${renderCollapsibleJson(a.attributes)}
+        </section>
+      `
       : '';
 
-    content.innerHTML = `
-      <h3>${escapeHtml(a.name)}</h3>
-      <div class="kv"><strong>Type:</strong> ${escapeHtml(a.type || '-')}</div>
-      <div class="kv"><strong>Owner:</strong> ${escapeHtml(ownerName)}</div>
-      <div class="kv"><strong>MAC:</strong> ${escapeHtml(a.mac || '-')}</div>
-      <div class="kv"><strong>Polling Address:</strong> ${pollAddress}</div>
-      <div class="kv"><strong>IPs:</strong> ${ipList || '-'}</div>
-      <div class="kv"><strong>Status:</strong> ${statusLabel}</div>
-      <div class="kv"><strong>Last Seen:</strong> ${escapeHtml(formatDateTime(a.last_seen))}</div>
-      <div class="kv"><strong>Created:</strong> ${escapeHtml(formatDateTime(a.created_at))}</div>
-      <div class="kv"><strong>Updated:</strong> ${escapeHtml(formatDateTime(a.updated_at))}</div>
-      ${customFieldsHtml}
-      ${attributesHtml}
+    const summaryHtml = `
+      <div class="asset-summary-grid">
+        <div class="asset-summary-card">
+          <h4>Identity</h4>
+          <div class="asset-field-list">
+            ${renderFieldRow('Type', escapeHtml(a.type || '-'))}
+            ${renderFieldRow('Owner', escapeHtml(ownerName))}
+            ${renderFieldRow('Source', escapeHtml(a.source || 'manual'))}
+          </div>
+        </div>
+        <div class="asset-summary-card">
+          <h4>Network</h4>
+          <div class="asset-field-list">
+            ${renderFieldRow('Polling Address', pollAddressHtml)}
+            ${renderFieldRow('IP Addresses', renderTagPills(ipItems))}
+            ${renderFieldRow('MAC Address', `<span class="monospace">${escapeHtml(a.mac || '-')}</span>`)}
+          </div>
+        </div>
+        <div class="asset-summary-card">
+          <h4>Status &amp; Polling</h4>
+          <div class="asset-field-list">
+            ${renderFieldRow('Status', statusLabel)}
+            ${renderFieldRow('Last Seen', escapeHtml(formatDateTime(a.last_seen)))}
+            ${renderFieldRow('Poll Type', escapeHtml(a.poll_type || '-'))}
+            ${renderFieldRow('Polling Enabled', a.poll_enabled ? '<span class="tag-pill tag-pill-success">Enabled</span>' : '<span class="tag-pill tag-pill-muted">Disabled</span>')}
+            ${renderFieldRow('Created', escapeHtml(formatDateTime(a.created_at)))}
+            ${renderFieldRow('Updated', escapeHtml(formatDateTime(a.updated_at)))}
+          </div>
+        </div>
+      </div>
+    `;
+
+    body.innerHTML = `
+      ${summaryHtml}
+      ${customFieldsSection}
+      ${attributesSection}
       ${changeHistoryHtml}
     `;
-    drawer.classList.remove('hidden');
+
+    if (title) {
+      title.textContent = a.name || 'Asset Details';
+    }
+
+    modal.showModal();
   }).catch(err => {
     console.error('Error loading asset:', err);
     alert('Failed to load asset: ' + err.message);
@@ -1828,9 +2023,17 @@ const setupAllHandlers = () => {
     };
   });
 
-  el('#drawer .close').onclick = () => {
-    el('#drawer').classList.add('hidden');
-  };
+  const assetViewModal = el('#asset-view-modal');
+  if (assetViewModal) {
+    assetViewModal.querySelectorAll('[data-close]').forEach(btn => {
+      btn.onclick = () => assetViewModal.close();
+    });
+    assetViewModal.addEventListener('click', (event) => {
+      if (event.target === assetViewModal) {
+        assetViewModal.close();
+      }
+    });
+  }
 
 };
 

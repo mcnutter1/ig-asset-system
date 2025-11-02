@@ -41,6 +41,7 @@ Base: `/api.php?action=...`
     "online_status": true
   }
   ```
+  - When the poller reports a probe error (e.g. `attributes.poller.error`) or sends only heartbeat metadata without any asset changes, the API now rejects the request with HTTP 422 to prevent empty updates from wiping existing state. Successful submissions must include substantive fields such as interfaces, hardware details, IP addresses, or other attributes.
 - `GET action=agent_download_linux&token=...` — token-injected Python script
 
 ## Poller

@@ -87,13 +87,20 @@
         </table>
       </div>
 
-      <!-- Asset Detail Drawer -->
-      <div id="drawer" class="drawer hidden">
-        <div class="drawer-content">
-          <button type="button" class="close" aria-label="Close">&times;</button>
-          <div id="asset-detail"></div>
-        </div>
-      </div>
+      <!-- Asset Detail Modal -->
+      <dialog id="asset-view-modal" class="asset-view-modal">
+        <article>
+          <header>
+            <h3 id="asset-view-title">Asset Details</h3>
+            <button type="button" aria-label="Close" class="modal-close" data-close></button>
+          </header>
+          <section id="asset-view-body" class="asset-view-body"></section>
+          <footer class="modal-footer">
+            <span class="flex-spacer"></span>
+            <button type="button" class="secondary" data-close>Close</button>
+          </footer>
+        </article>
+      </dialog>
 
       <!-- Asset Create/Edit Modal -->
       <dialog id="asset-modal">
