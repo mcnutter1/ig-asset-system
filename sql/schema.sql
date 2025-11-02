@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS assets (
   poll_username VARCHAR(190),
   poll_password VARCHAR(190),
   poll_port     INT NULL,
-  poll_enable_password VARCHAR(190),
+  poll_enable_password VARCHAR(255),
   owner_user_id BIGINT,
   online_status ENUM('online','offline','unknown') DEFAULT 'unknown',
   last_seen     DATETIME NULL,

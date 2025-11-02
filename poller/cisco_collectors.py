@@ -1,6 +1,6 @@
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import paramiko
 
@@ -62,13 +62,58 @@ def collect_cisco_asset(target: Dict[str, Any]) -> Dict[str, Any]:
 
             show_version = _run_command(shell, "show version", timeout)
             show_inventory = _run_command(shell, "show inventory", timeout, allow_failure=True)
-            int_brief = _run_command(shell, "show ip interface brief", timeout)
+
+            int_brief = _run_command(shell, "show ip interface brief vrf all", timeout, allow_failure=True)
+            if not int_brief.strip():
+                int_brief = _run_command(shell, "show ip interface brief", timeout)
+
             int_desc = _run_command(shell, "show interface description", timeout, allow_failure=True)
+            ipv6_brief = _run_command(shell, "show ipv6 interface brief", timeout, allow_failure=True)
+            vrf_table = _run_command(shell, "show vrf", timeout, allow_failure=True)
 
             version_info = _parse_show_version(show_version)
             inventory_info = _parse_show_inventory(show_inventory) if show_inventory else {}
             interfaces = _parse_interface_brief(int_brief)
             descriptions = _parse_interface_descriptions(int_desc)
+            ipv6_interfaces = _parse_ipv6_interface_brief(ipv6_brief)
+            vrfs = _parse_vrf_table(vrf_table)
+
+            interface_index = {iface["name"]: iface for iface in interfaces}
+            for name, data in ipv6_interfaces.items():
+                entry = interface_index.get(name)
+                if entry is None:
+                    entry = {
+                        "name": name,
+                        "addresses": [],
+                        "ipv4_addresses": [],
+                        "ipv6_addresses": [],
+                        "status": data.get("status"),
+                        "protocol": data.get("protocol"),
+                    }
+                    interfaces.append(entry)
+                    interface_index[name] = entry
+
+                entry.setdefault("ipv4_addresses", [])
+                entry.setdefault("ipv6_addresses", [])
+                entry.setdefault("addresses", [])
+
+                for addr in data.get("addresses", []):
+                    if addr not in entry["ipv6_addresses"]:
+                        entry["ipv6_addresses"].append(addr)
+                    if addr not in entry["addresses"]:
+                        entry["addresses"].append(addr)
+
+                if not entry.get("status") and data.get("status"):
+                    entry["status"] = data["status"]
+                if not entry.get("protocol") and data.get("protocol"):
+                    entry["protocol"] = data["protocol"]
+
+            for vrf_entry in vrfs:
+                vrf_name = vrf_entry.get("name")
+                for iface_name in vrf_entry.get("interfaces", []):
+                    iface_entry = interface_index.get(iface_name)
+                    if iface_entry is not None and not iface_entry.get("vrf") and vrf_name:
+                        iface_entry["vrf"] = vrf_name
 
             for iface in interfaces:
                 name = iface["name"]
@@ -114,11 +159,21 @@ def collect_cisco_asset(target: Dict[str, Any]) -> Dict[str, Any]:
             if version_info.get("uptime"):
                 os_info["uptime"] = version_info["uptime"]
 
+            network_payload: Optional[Dict[str, Any]] = None
+            if interfaces or vrfs:
+                network_payload = {"interfaces": interfaces} if interfaces else {}
+                if vrfs:
+                    if network_payload is None:
+                        network_payload = {}
+                    network_payload["vrfs"] = vrfs
+                if network_payload and "interfaces" not in network_payload and interfaces:
+                    network_payload["interfaces"] = interfaces
+
             result: Dict[str, Any] = {
                 "name": hostname or host,
                 "os": {k: v for k, v in os_info.items() if v},
                 "hardware": {k: v for k, v in hardware.items() if v},
-                "network": {"interfaces": interfaces} if interfaces else None,
+                "network": network_payload,
                 "ips": ips,
                 "mac": version_info.get("base_mac"),
                 "metrics": None,
@@ -278,30 +333,132 @@ def _parse_show_inventory(output: str) -> Dict[str, Any]:
     return data
 
 
+_INTERFACE_BRIEF_RE = re.compile(
+    r"^(?P<iface>\S+)\s+(?P<ip>\S+)\s+\S+\s+\S+\s+(?P<status>.+?)\s+(?P<protocol>\S+)(?:\s+(?P<vrf>\S+))?$",
+    re.IGNORECASE,
+)
+
+
 def _parse_interface_brief(output: str) -> List[Dict[str, Any]]:
     interfaces: List[Dict[str, Any]] = []
     if not output:
         return interfaces
 
     for line in output.splitlines():
-        line = line.rstrip()
-        if not line or line.lower().startswith("interface"):
+        stripped = line.strip()
+        if not stripped or stripped.lower().startswith("interface"):
             continue
-        parts = line.split()
-        if len(parts) < 6:
+        match = _INTERFACE_BRIEF_RE.match(stripped)
+        if not match:
             continue
-        name = parts[0]
-        ip = parts[1]
-        status = " ".join(parts[4:-1]) if len(parts) > 5 else parts[4]
-        protocol = parts[-1]
+
+        name = match.group("iface")
+        ip = match.group("ip")
+        status = match.group("status").strip()
+        protocol = match.group("protocol").strip()
+        vrf = match.group("vrf")
+
         entry: Dict[str, Any] = {
             "name": name,
-            "addresses": [] if ip.lower() == "unassigned" else [ip],
+            "addresses": [],
+            "ipv4_addresses": [],
+            "ipv6_addresses": [],
             "status": status,
             "protocol": protocol,
         }
+
+        if vrf and vrf not in {"--"}:
+            entry["vrf"] = vrf
+
+        if ip.lower() != "unassigned":
+            entry["addresses"].append(ip)
+            entry["ipv4_addresses"].append(ip)
+
         interfaces.append(entry)
     return interfaces
+
+
+_IPV6_BRIEF_HEADER_RE = re.compile(r"^(?P<iface>\S+)\s+\[(?P<state>[^\]]+)\]", re.IGNORECASE)
+
+
+def _parse_ipv6_interface_brief(output: str) -> Dict[str, Dict[str, Any]]:
+    results: Dict[str, Dict[str, Any]] = {}
+    if not output:
+        return results
+
+    current_iface: Optional[str] = None
+    for raw_line in output.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+
+        header = _IPV6_BRIEF_HEADER_RE.match(line.strip())
+        if header:
+            iface = header.group("iface")
+            state = header.group("state")
+            state_parts = [part.strip() for part in state.split("/")]
+            status = state_parts[0] if state_parts else None
+            protocol = state_parts[1] if len(state_parts) > 1 else None
+            results[iface] = {
+                "status": status,
+                "protocol": protocol,
+                "addresses": [],
+            }
+            current_iface = iface
+            continue
+
+        if current_iface is None:
+            continue
+
+        addr = line.strip()
+        if not addr or addr.lower() == "unassigned":
+            continue
+
+        addr_token = addr.split()[0]
+        iface_entry = results[current_iface]
+        if addr_token not in iface_entry["addresses"]:
+            iface_entry["addresses"].append(addr_token)
+
+    return results
+
+
+def _parse_vrf_table(output: str) -> List[Dict[str, Any]]:
+    vrfs: List[Dict[str, Any]] = []
+    if not output:
+        return vrfs
+
+    lines = [line for line in output.splitlines() if line.strip()]
+    if len(lines) <= 1:
+        return vrfs
+
+    current: Optional[Dict[str, Any]] = None
+    for line in lines[1:]:
+        if line.strip().lower().startswith("(default vrf)"):
+            # Ignore explanatory lines
+            continue
+
+        if line[:1].strip():
+            # New VRF entry (line does not start with whitespace)
+            parts = re.split(r"\s{2,}", line.strip())
+            if not parts:
+                continue
+            name = parts[0]
+            rd = parts[1] if len(parts) > 1 else None
+            iface_str = parts[2] if len(parts) > 2 else ""
+            interfaces = [token for token in re.split(r"[\s,]+", iface_str) if token]
+            current = {
+                "name": name,
+                "route_distinguisher": None if not rd or rd == "<not set>" else rd,
+                "interfaces": interfaces,
+            }
+            vrfs.append(current)
+        else:
+            if current is None:
+                continue
+            continuation = [token for token in re.split(r"[\s,]+", line.strip()) if token]
+            current["interfaces"].extend(continuation)
+
+    return vrfs
 
 
 def _parse_interface_descriptions(output: str) -> Dict[str, Dict[str, str]]:

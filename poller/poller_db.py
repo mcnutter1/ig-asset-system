@@ -675,7 +675,20 @@ class SanitizationManager:
         for iface in interfaces:
             if isinstance(iface, dict):
                 updated = dict(iface)
-                updated['addresses'] = self.filter_interface_addresses(iface.get('addresses', []))
+                ipv4_addresses = self.filter_interface_addresses(iface.get('ipv4_addresses', []))
+                ipv6_addresses = self.filter_interface_addresses(iface.get('ipv6_addresses', []))
+                addresses = self.filter_interface_addresses(iface.get('addresses', []))
+
+                if not addresses:
+                    merged = []
+                    for addr in ipv4_addresses + ipv6_addresses:
+                        if addr not in merged:
+                            merged.append(addr)
+                    addresses = merged
+
+                updated['ipv4_addresses'] = ipv4_addresses if ipv4_addresses else []
+                updated['ipv6_addresses'] = ipv6_addresses if ipv6_addresses else []
+                updated['addresses'] = addresses if addresses else []
                 sanitized.append(updated)
             else:
                 sanitized.append(iface)
