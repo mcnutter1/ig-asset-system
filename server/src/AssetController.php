@@ -204,6 +204,7 @@ class AssetController {
       }
     }
     $sets = []; $vals = [];
+    $logIgnoredFields = ['last_seen', 'updated_at', 'created_at'];
     foreach ($fields as $f) {
       if (array_key_exists($f, $data)) {
         $sets[] = "$f=?";
@@ -215,7 +216,9 @@ class AssetController {
       $pdo->prepare("UPDATE assets SET " . implode(',', $sets) . " WHERE id=?")->execute($vals);
       foreach ($fields as $f) {
         if (array_key_exists($f, $data) && $old[$f] !== $data[$f]) {
-          change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, $f, $old[$f], $data[$f]);
+          if (!in_array($f, $logIgnoredFields, true)) {
+            change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, $f, $old[$f], $data[$f]);
+          }
         }
       }
     }
@@ -263,17 +266,40 @@ class AssetController {
     $pdo = DB::conn();
     $stmt = $pdo->prepare("SELECT family, ip FROM asset_ips WHERE asset_id=? ORDER BY id ASC");
     $stmt->execute([$id]);
-    return $stmt->fetchAll();
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC);
   }
 
   private static function set_ips($id, $ips, $actor='manual') {
     $pdo = DB::conn();
-    $pdo->prepare("DELETE FROM asset_ips WHERE asset_id=?")->execute([$id]);
+    $existingRecords = self::ips($id);
+    $existingIps = array_map(fn($row) => $row['ip'], $existingRecords);
+
+    $normalizedIps = [];
     foreach ($ips as $ip) {
+      $candidate = trim((string)$ip);
+      if ($candidate === '') {
+        continue;
+      }
+      $normalizedIps[] = $candidate;
+    }
+
+    $dedupedIps = array_values(array_unique($normalizedIps));
+
+    $existingCompare = $existingIps;
+    sort($existingCompare);
+    $newCompare = $dedupedIps;
+    sort($newCompare);
+
+    if ($existingCompare === $newCompare) {
+      return;
+    }
+
+    $pdo->prepare("DELETE FROM asset_ips WHERE asset_id=?")->execute([$id]);
+    foreach ($dedupedIps as $ip) {
       $fam = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? 'ipv6' : 'ipv4';
       $pdo->prepare("INSERT INTO asset_ips (asset_id,family,ip) VALUES (?,?,?)")->execute([$id,$fam,$ip]);
     }
-    change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, 'ips', null, $ips);
+    change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, 'ips', $existingIps, $dedupedIps);
   }
 
   private static function attributes($id) {
@@ -335,10 +361,40 @@ class AssetController {
 
   private static function set_attributes($id, $attrs, $actor='manual') {
     $pdo = DB::conn();
-    $json = json_encode($attrs);
-    $stmt = $pdo->prepare("INSERT INTO asset_attributes (asset_id, attributes, updated_by) VALUES (?, CAST(? AS JSON), ?) ON DUPLICATE KEY UPDATE attributes=VALUES(attributes), updated_by=VALUES(updated_by)");
-    $stmt->execute([$id, $json, $actor]);
-    change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, 'attributes', null, $attrs);
+
+    $existingRaw = self::attributes($id);
+    $existingAttrs = json_decode(json_encode($existingRaw), true);
+    if (!is_array($existingAttrs)) {
+      $existingAttrs = [];
+    }
+
+    if ($attrs instanceof \stdClass) {
+      $attrs = json_decode(json_encode($attrs), true);
+    }
+
+    $newAttrs = $attrs;
+    if ($newAttrs === null) {
+      $canonicalNew = null;
+    } else {
+      $canonicalNew = is_array($newAttrs) ? $newAttrs : [];
+    }
+
+    $existingComparable = self::normalizeForComparison($existingAttrs);
+    $newComparable = self::normalizeForComparison($canonicalNew);
+
+    if ($existingComparable === $newComparable) {
+      return;
+    }
+
+    if ($attrs === null) {
+      $pdo->prepare("DELETE FROM asset_attributes WHERE asset_id=?")->execute([$id]);
+    } else {
+      $json = json_encode($attrs);
+      $stmt = $pdo->prepare("INSERT INTO asset_attributes (asset_id, attributes, updated_by) VALUES (?, CAST(? AS JSON), ?) ON DUPLICATE KEY UPDATE attributes=VALUES(attributes), updated_by=VALUES(updated_by)");
+      $stmt->execute([$id, $json, $actor]);
+    }
+
+    change_log($id, $_SESSION['user']['username'] ?? $actor, $actor, 'attributes', $existingAttrs, $canonicalNew);
   }
 
   private static function changes($id) {
@@ -346,5 +402,29 @@ class AssetController {
     $stmt = $pdo->prepare("SELECT actor, source, field, old_value, new_value, changed_at FROM changes WHERE asset_id=? ORDER BY changed_at DESC LIMIT 200");
     $stmt->execute([$id]);
     return $stmt->fetchAll();
+  }
+
+  private static function normalizeForComparison($value) {
+    if ($value instanceof \stdClass) {
+      $value = (array)$value;
+    }
+
+    if (is_array($value)) {
+      $isAssoc = self::isAssocArray($value);
+      if ($isAssoc) {
+        ksort($value);
+      }
+      $normalized = [];
+      foreach ($value as $key => $child) {
+        $normalized[$key] = self::normalizeForComparison($child);
+      }
+      return $isAssoc ? $normalized : array_values($normalized);
+    }
+
+    return $value;
+  }
+
+  private static function isAssocArray(array $array) {
+    return array_keys($array) !== range(0, count($array) - 1);
   }
 }

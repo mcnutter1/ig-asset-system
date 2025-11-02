@@ -58,6 +58,98 @@ const formatDateTime = (value) => {
   }
 };
 
+const parseChangeValue = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    return value;
+  }
+};
+
+const formatChangeFieldLabel = (field) => {
+  if (!field) return 'Unknown';
+  if (field === 'asset') return 'Asset Created';
+  return field
+    .split(/[_\-]+/)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const renderChangeValue = (field, value) => {
+  const sensitiveFields = new Set(['poll_password', 'poll_enable_password']);
+  if (sensitiveFields.has(field)) {
+    return '<span class="change-redacted">Hidden for security</span>';
+  }
+
+  if (value === null || value === undefined) {
+    return '<span class="change-null">null</span>';
+  }
+
+  if (typeof value === 'object') {
+    const pretty = escapeHtml(JSON.stringify(value, null, 2));
+    return `<pre class="change-json">${pretty}</pre>`;
+  }
+
+  if (typeof value === 'boolean') {
+    return `<code>${value}</code>`;
+  }
+
+  if (typeof value === 'number') {
+    return `<code>${value}</code>`;
+  }
+
+  const str = String(value);
+  if (str.trim() === '') {
+    return '<span class="change-empty">(empty)</span>';
+  }
+
+  return escapeHtml(str);
+};
+
+const renderChangeHistory = (changes = []) => {
+  const safeChanges = Array.isArray(changes) ? changes : [];
+  const titleBlock = '<hr><h4>Change History</h4>';
+  if (!safeChanges.length) {
+    return `<div class="change-history">${titleBlock}<p class="change-empty-state">No changes recorded yet.</p></div>`;
+  }
+
+  const items = safeChanges.map(change => {
+    const field = change.field || 'unknown';
+    const label = formatChangeFieldLabel(field);
+    const actor = escapeHtml(change.actor || 'system');
+    const source = change.source ? escapeHtml(change.source) : '';
+    const sourceSuffix = source ? ` · via ${source}` : '';
+    const timestamp = escapeHtml(formatDateTime(change.changed_at));
+    const oldVal = renderChangeValue(field, parseChangeValue(change.old_value));
+    const newVal = renderChangeValue(field, parseChangeValue(change.new_value));
+
+    return `
+      <div class="change-entry">
+        <div class="change-timeline-dot"></div>
+        <div class="change-meta">
+          <span class="change-field">${escapeHtml(label)}</span>
+          <span class="change-actor">${actor}</span>
+          <span class="change-time">${timestamp}${sourceSuffix}</span>
+        </div>
+        <div class="change-values">
+          <div class="change-block">
+            <div class="change-label">Was</div>
+            <div class="change-data">${oldVal}</div>
+          </div>
+          <div class="change-block">
+            <div class="change-label">Now</div>
+            <div class="change-data">${newVal}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="change-history">${titleBlock}<div class="change-list">${items}</div></div>`;
+};
+
 const getStatusColor = (status) => {
   if (status === 'online') return '#2ba471';
   if (status === 'offline') return '#d64545';
@@ -1402,8 +1494,14 @@ const viewAsset = (id) => {
     const drawer = el('#drawer');
     const content = el('#asset-detail');
     const hasAttributes = a.attributes && Object.keys(a.attributes).length > 0;
-    const ownerName = getOwnerDisplayName(a);
-    
+    const ownerName = getOwnerDisplayName(a) || '-';
+    const ipList = Array.isArray(a.ips) ? a.ips.map(x => escapeHtml(x.ip)).filter(Boolean).join(', ') : '';
+    const pollAddress = a.poll_address ? escapeHtml(a.poll_address) : '-';
+    const status = a.online_status || 'unknown';
+    const statusColor = getStatusColor(status);
+  const statusLabel = `<span class="status-indicator" style="--status-color: ${statusColor};">${escapeHtml(status)}</span>`;
+    const changeHistoryHtml = renderChangeHistory(a.changes || []);
+
     // Build custom fields display
     let customFieldsHtml = '';
     const customFieldsArray = Array.isArray(a.custom_fields)
@@ -1417,25 +1515,39 @@ const viewAsset = (id) => {
           if (!field) return;
           let displayValue = field.value;
           if (field.field_type === 'checkbox') {
-            displayValue = (field.value === 'true' || field.value === '1') ? '✓ Yes' : '✗ No';
+            displayValue = (field.value === 'true' || field.value === '1' || field.value === true) ? '✓ Yes' : '✗ No';
           }
-          customFieldsHtml += `<div class="kv"><strong>${field.label}:</strong> ${displayValue}</div>`;
+          let renderedValue;
+          if (displayValue === null || displayValue === undefined) {
+            renderedValue = '<span class="change-null">null</span>';
+          } else if (typeof displayValue === 'object') {
+            renderedValue = `<pre class="change-json">${escapeHtml(JSON.stringify(displayValue, null, 2))}</pre>`;
+          } else {
+            renderedValue = escapeHtml(String(displayValue));
+          }
+          customFieldsHtml += `<div class="kv"><strong>${escapeHtml(field.label || field.name || 'Field')}:</strong> ${renderedValue}</div>`;
         });
       }
     }
-    
+
+    const attributesHtml = hasAttributes
+      ? `<hr><div class="kv"><strong>Attributes:</strong></div><pre>${escapeHtml(JSON.stringify(a.attributes, null, 2))}</pre>`
+      : '';
+
     content.innerHTML = `
-      <h3>${a.name}</h3>
-      <div class="kv"><strong>Type:</strong> ${a.type}</div>
-      <div class="kv"><strong>Owner:</strong> ${ownerName}</div>
-      <div class="kv"><strong>MAC:</strong> ${a.mac || '-'}</div>
-  <div class="kv"><strong>Polling Address:</strong> ${a.poll_address || '-'}</div>
-      <div class="kv"><strong>IPs:</strong> ${(a.ips || []).map(x => x.ip).join(', ') || '-'}</div>
-      <div class="kv"><strong>Status:</strong> ${a.online_status}</div>
-      <div class="kv"><strong>Created:</strong> ${a.created_at}</div>
-      <div class="kv"><strong>Updated:</strong> ${a.updated_at}</div>
+      <h3>${escapeHtml(a.name)}</h3>
+      <div class="kv"><strong>Type:</strong> ${escapeHtml(a.type || '-')}</div>
+      <div class="kv"><strong>Owner:</strong> ${escapeHtml(ownerName)}</div>
+      <div class="kv"><strong>MAC:</strong> ${escapeHtml(a.mac || '-')}</div>
+      <div class="kv"><strong>Polling Address:</strong> ${pollAddress}</div>
+      <div class="kv"><strong>IPs:</strong> ${ipList || '-'}</div>
+      <div class="kv"><strong>Status:</strong> ${statusLabel}</div>
+      <div class="kv"><strong>Last Seen:</strong> ${escapeHtml(formatDateTime(a.last_seen))}</div>
+      <div class="kv"><strong>Created:</strong> ${escapeHtml(formatDateTime(a.created_at))}</div>
+      <div class="kv"><strong>Updated:</strong> ${escapeHtml(formatDateTime(a.updated_at))}</div>
       ${customFieldsHtml}
-      ${hasAttributes ? `<hr><div class="kv"><strong>Attributes:</strong></div><pre>${JSON.stringify(a.attributes, null, 2)}</pre>` : ''}
+      ${attributesHtml}
+      ${changeHistoryHtml}
     `;
     drawer.classList.remove('hidden');
   }).catch(err => {

@@ -54,3 +54,7 @@ Base: `/api.php?action=...`
 
 ## Change Log
 Part of `asset_get` response.
+
+- Entries are recorded only when substantive values change. Timestamp-only updates (for example, refreshes that touch `last_seen` or `updated_at`) no longer create history noise.
+- IP address and attribute updates compare against the previous state, so re-saving identical data is ignored.
+- Sensitive credential fields (like polling passwords) are redacted when rendered in the UI change timeline, while the raw API payload includes the original JSON-encoded values.
