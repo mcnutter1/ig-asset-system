@@ -266,7 +266,7 @@ const renderChangeHistory = (changes = []) => {
       <section class="modal-section change-history">
         <div class="modal-section-header">
           <h4>Change History</h4>
-          <span class="tw-text-muted tw-text-xs">No changes recorded yet</span>
+          <span class="text-muted text-uppercase small fw-semibold">No changes recorded yet</span>
         </div>
         <p class="change-empty-state">We&apos;ll display field-level updates here as soon as something changes.</p>
       </section>
@@ -310,7 +310,7 @@ const renderChangeHistory = (changes = []) => {
     <section class="modal-section change-history">
       <div class="modal-section-header">
         <h4>Change History</h4>
-        <span class="tw-text-muted tw-text-xs">${safeChanges.length} entr${safeChanges.length === 1 ? 'y' : 'ies'}</span>
+        <span class="badge bg-light text-muted fw-semibold">${safeChanges.length} entr${safeChanges.length === 1 ? 'y' : 'ies'}</span>
       </div>
       <div class="change-list">${items}</div>
     </section>
@@ -472,9 +472,10 @@ function renderAssetTable(assets) {
     .map(column => {
       const def = assetColumnDefinitions[column];
       const label = def ? def.label : column;
-      return `<th data-column="${column}">${escapeHtml(label)}</th>`;
+      const alignment = column === 'actions' ? ' text-end' : '';
+      return `<th scope="col" data-column="${column}" class="text-uppercase small text-muted fw-semibold${alignment}">${escapeHtml(label)}</th>`;
     })
-    .join('') + '<th>Actions</th>';
+    .join('') + '<th scope="col" class="text-end text-uppercase small text-muted fw-semibold">Actions</th>';
 
   headRow.innerHTML = headerHtml;
 
@@ -496,7 +497,7 @@ function renderAssetTable(assets) {
       const value = def ? def.render(asset) : '';
       return `<td data-column="${column}">${value}</td>`;
     }).join('');
-    return `<tr data-asset-id="${escapeHtml(asset.id || '')}">${cells}<td class="actions-cell">${renderAssetActionButtons(asset)}</td></tr>`;
+    return `<tr data-asset-id="${escapeHtml(asset.id || '')}">${cells}<td class="actions-cell text-end">${renderAssetActionButtons(asset)}</td></tr>`;
   }).join('');
 }
 
@@ -1561,58 +1562,105 @@ const renderCustomFieldsInModal = (assetType, customFieldValues = []) => {
   
   // Get fields applicable to this asset type
   api(`custom_fields_for_type&type=${assetType || 'unknown'}`).then(fields => {
-    if (!fields || fields.length === 0) {
+    if (!fields || !fields.length) {
       container.innerHTML = '';
+      container.classList.add('d-none');
       return;
     }
-    
-    container.innerHTML = '<hr><h4 style="margin-top: 15px;">Custom Fields</h4>' + fields.map(field => {
-      const existing = valuesById.get(String(field.id));
-      const value = existing && existing.value !== undefined ? existing.value : (field.default_value || '');
-      const required = field.is_required ? 'required' : '';
-  const star = field.is_required ? '<span style="color: var(--accent-red);">*</span>' : '';
-      
-      let inputHtml = '';
-      
+
+    const visibleFields = fields.filter(Boolean);
+    if (!visibleFields.length) {
+      container.innerHTML = '';
+      container.classList.add('d-none');
+      return;
+    }
+
+    container.classList.remove('d-none');
+
+    const fieldCards = visibleFields.map(field => {
+      const fieldId = String(field.id);
+      const existing = valuesById.get(fieldId);
+      const rawValue = existing && existing.value !== undefined ? existing.value : field.default_value || '';
+      const value = typeof rawValue === 'string' ? rawValue : String(rawValue ?? '');
+      const requiredAttr = field.is_required ? 'required' : '';
+      const requiredIndicator = field.is_required ? '<span class="text-danger ms-1">*</span>' : '';
+      const labelText = escapeHtml(field.label || field.name || 'Field');
+      const helpHtml = field.help_text ? `<div class="form-text">${escapeHtml(field.help_text)}</div>` : '';
+
+      let controlHtml = '';
+
       switch (field.field_type) {
         case 'text':
         case 'email':
         case 'url':
-          inputHtml = `<input type="${field.field_type}" id="cf-${field.id}" value="${value || ''}" ${required} placeholder="${field.default_value || ''}">`;
+          controlHtml = `<input type="${field.field_type}" class="form-control" id="cf-${fieldId}" value="${escapeHtml(value)}" ${requiredAttr} placeholder="${escapeHtml(field.default_value || '')}">`;
           break;
         case 'number':
-          inputHtml = `<input type="number" id="cf-${field.id}" value="${value || ''}" ${required}>`;
+          controlHtml = `<input type="number" class="form-control" id="cf-${fieldId}" value="${escapeHtml(value)}" ${requiredAttr}>`;
           break;
         case 'date':
-          inputHtml = `<input type="date" id="cf-${field.id}" value="${value || ''}" ${required}>`;
+          controlHtml = `<input type="date" class="form-control" id="cf-${fieldId}" value="${escapeHtml(value)}" ${requiredAttr}>`;
           break;
         case 'textarea':
-          inputHtml = `<textarea id="cf-${field.id}" rows="3" ${required}>${value || ''}</textarea>`;
+          controlHtml = `<textarea class="form-control" id="cf-${fieldId}" rows="3" ${requiredAttr}>${escapeHtml(value)}</textarea>`;
           break;
-        case 'checkbox':
-          const checked = value === 'true' || value === '1' || value === 'on' ? 'checked' : '';
-          inputHtml = `<input type="checkbox" id="cf-${field.id}" ${checked}>`;
+        case 'checkbox': {
+          const checked = value === 'true' || value === '1' || value === 'on' || value === true ? 'checked' : '';
+          controlHtml = `
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="cf-${fieldId}" ${checked}>
+              <label class="form-check-label" for="cf-${fieldId}">${labelText}${requiredIndicator}</label>
+            </div>
+          `;
           break;
-        case 'select':
-          const options = field.select_options || [];
-          inputHtml = `<select id="cf-${field.id}" ${required}>
-            <option value="">Select...</option>
-            ${options.map(opt => `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-          </select>`;
+        }
+        case 'select': {
+          const options = Array.isArray(field.select_options) ? field.select_options : [];
+          const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}" ${value === opt ? 'selected' : ''}>${escapeHtml(opt)}</option>`).join('');
+          controlHtml = `
+            <select class="form-select" id="cf-${fieldId}" ${requiredAttr}>
+              <option value="">Select...</option>
+              ${optionsHtml}
+            </select>
+          `;
           break;
+        }
+        default:
+          controlHtml = `<input type="text" class="form-control" id="cf-${fieldId}" value="${escapeHtml(value)}" ${requiredAttr}>`;
       }
-      
+
+      if (field.field_type === 'checkbox') {
+        return `
+          <div class="col-md-6 custom-field-item" data-field-id="${fieldId}">
+            ${controlHtml}
+            ${helpHtml}
+          </div>
+        `;
+      }
+
       return `
-        <label data-field-id="${field.id}">
-          ${field.label} ${star}
-          ${inputHtml}
-          ${field.help_text ? `<small>${field.help_text}</small>` : ''}
-        </label>
+        <div class="col-md-6 custom-field-item" data-field-id="${fieldId}">
+          <label class="form-label" for="cf-${fieldId}">${labelText}${requiredIndicator}</label>
+          ${controlHtml}
+          ${helpHtml}
+        </div>
       `;
     }).join('');
+
+    const activeCount = visibleFields.length;
+    container.innerHTML = `
+      <div class="modal-section-header">
+        <h4 class="h5 mb-0">Custom Fields</h4>
+        <span class="badge bg-light text-muted fw-semibold">${activeCount} field${activeCount === 1 ? '' : 's'}</span>
+      </div>
+      <div class="row g-3">
+        ${fieldCards}
+      </div>
+    `;
   }).catch(err => {
     console.error('Failed to load custom fields:', err);
     container.innerHTML = '';
+    container.classList.add('d-none');
   });
 };
 
@@ -1621,11 +1669,12 @@ const getCustomFieldValues = () => {
   if (!container) return {};
   
   const values = {};
-  const labels = container.querySelectorAll('label[data-field-id]');
-  
-  labels.forEach(label => {
-    const fieldId = label.dataset.fieldId;
-    const input = label.querySelector('input, select, textarea');
+  const groups = container.querySelectorAll('.custom-field-item');
+
+  groups.forEach(group => {
+    const fieldId = group.dataset.fieldId;
+    if (!fieldId) return;
+    const input = group.querySelector('input, select, textarea');
     if (!input) return;
     
     if (input.type === 'checkbox') {
@@ -1703,7 +1752,7 @@ const viewAsset = (id) => {
         <section class="modal-section">
           <div class="modal-section-header">
             <h4>Custom Fields</h4>
-            <span class="tw-text-muted tw-text-xs">${fieldsWithValues.length} field${fieldsWithValues.length === 1 ? '' : 's'}</span>
+            <span class="badge bg-light text-muted fw-semibold">${fieldsWithValues.length} field${fieldsWithValues.length === 1 ? '' : 's'}</span>
           </div>
           <div class="asset-field-list">
             ${items}
@@ -1717,7 +1766,7 @@ const viewAsset = (id) => {
         <section class="modal-section">
           <div class="modal-section-header">
             <h4>Attributes</h4>
-            <span class="tw-text-muted tw-text-xs">Raw collector payload</span>
+            <span class="badge bg-light text-muted fw-semibold">Raw collector payload</span>
           </div>
           ${renderCollapsibleJson(a.attributes)}
         </section>
@@ -1728,7 +1777,7 @@ const viewAsset = (id) => {
       <section class="modal-section">
         <div class="modal-section-header">
           <h4>Asset Overview</h4>
-          <span class="tw-text-muted tw-text-xs">Refreshed ${escapeHtml(formatDateTime(a.updated_at))}</span>
+          <span class="badge bg-light text-muted fw-semibold">Refreshed ${escapeHtml(formatDateTime(a.updated_at))}</span>
         </div>
         <div class="asset-summary-grid">
           <div class="asset-summary-card">

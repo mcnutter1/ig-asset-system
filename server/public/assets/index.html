@@ -4,11 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Asset Tracker</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-Gh8aGb5DIpjQGDBPGIsW38KPUjcjoUswdcJtRe0cuBwXkIbC2SQfGCG08PeY3h6k" crossorigin="anonymous">
   <link rel="stylesheet" href="/assets/styles.css"/>
+  <link rel="stylesheet" href="/assets/theme.css"/>
 </head>
-<body>
-  <div id="app">
+<body class="bg-light">
+  <div id="app" class="d-flex flex-column min-vh-100">
     <!-- Bootstrap Warning -->
     <div id="bootstrap-warning" class="bootstrap-warning hidden">
       <div class="bootstrap-content">
@@ -22,498 +24,573 @@
     </div>
 
     <!-- Header -->
-    <header>
-      <nav>
-        <ul>
-          <li><strong>Asset Tracker</strong></li>
-        </ul>
-        <ul>
-          <li id="user-info"></li>
-        </ul>
+    <header class="app-navbar shadow-sm">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+          <span class="navbar-brand fw-semibold">Asset Tracker</span>
+          <div class="d-flex align-items-center ms-auto">
+            <span id="user-info" class="text-white-50 small"></span>
+          </div>
+        </div>
       </nav>
     </header>
 
     <!-- Login Panel -->
-    <section id="login-panel" class="hidden">
-      <article style="max-width: 400px; margin: 50px auto;">
-        <h2>Sign in</h2>
-        <form>
-          <input id="username" placeholder="Username" required>
-          <input id="password" type="password" placeholder="Password" required>
-          <button id="login-btn">Login</button>
-          <div id="login-msg"></div>
-        </form>
-      </article>
+    <section id="login-panel" class="hidden py-5">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-xl-4 col-lg-5 col-md-6">
+            <article class="card border-0 shadow-sm">
+              <div class="card-body p-4 p-lg-5">
+                <h2 class="h4 text-center mb-4">Sign in</h2>
+                <form>
+                  <div class="mb-3">
+                    <label class="form-label" for="username">Username</label>
+                    <input id="username" class="form-control" placeholder="Username" required>
+                  </div>
+                  <div class="mb-4">
+                    <label class="form-label" for="password">Password</label>
+                    <input id="password" type="password" class="form-control" placeholder="Password" required>
+                  </div>
+                  <button id="login-btn" class="btn btn-primary w-100">Login</button>
+                  <div id="login-msg" class="mt-3 text-center small"></div>
+                </form>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Main Content -->
-    <section id="main" class="hidden">
-      <!-- Toolbar -->
-      <nav style="background: var(--form-element-background-color);">
-        <ul>
-          <li>
-            <input id="search" placeholder="Search assets..." style="min-width: 300px;">
-          </li>
-          <li>
-            <select id="owner-filter" style="min-width: 200px;">
-              <option value="">All Owners</option>
-            </select>
-          </li>
-        </ul>
-        <ul>
-          <li><button id="refresh">Refresh</button></li>
-          <li><button id="new-asset">+ New Asset</button></li>
-          <li><button id="column-config">Columns</button></li>
-          <li><button id="settings-btn">⚙ Settings</button></li>
-        </ul>
-      </nav>
-
-      <!-- Asset Table -->
-      <div style="overflow-x: auto;">
-        <table id="asset-table">
-          <thead>
-            <tr id="asset-table-head">
-              <th>Name</th>
-              <th>Type</th>
-              <th>IP Addresses</th>
-              <th>MAC Address</th>
-              <th>Owner</th>
-              <th>Status</th>
-              <th>Last Seen</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="asset-list"></tbody>
-        </table>
-      </div>
-
-      <!-- Asset Detail Modal -->
-      <dialog id="asset-view-modal" class="asset-view-modal">
-        <article>
-          <header>
-            <h3 id="asset-view-title">Asset Details</h3>
-            <button type="button" aria-label="Close" class="modal-close" data-close></button>
-          </header>
-          <section id="asset-view-body" class="asset-view-body"></section>
-          <footer class="modal-footer">
-            <span class="flex-spacer"></span>
-            <button type="button" class="secondary" data-close>Close</button>
-          </footer>
-        </article>
-      </dialog>
-
-      <!-- Asset Create/Edit Modal -->
-      <dialog id="asset-modal">
-        <article style="width: 600px;">
-          <header>
-            <h3 id="modal-title">Add Asset</h3>
-            <button type="button" aria-label="Close" class="modal-close"></button>
-          </header>
-          <form id="asset-form">
-            <input type="hidden" id="asset-id">
-
-            <div class="modal-body">
-              <div class="grid">
-                <label>Name
-                  <input type="text" id="asset-name" placeholder="Server-01" required>
-                </label>
-                <label>Type
-                  <select id="asset-type" required>
-                    <option value="">Select asset type...</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="grid">
-                <label>Owner
-                  <select id="asset-owner">
-                    <option value="">No Owner</option>
-                  </select>
-                </label>
-                <label>MAC Address
-                  <input type="text" id="asset-mac" placeholder="AA:BB:CC:DD:EE:FF">
-                </label>
-              </div>
-
-              <label>IP Addresses
-                <input type="text" id="asset-ips" placeholder="192.168.1.10, 192.168.1.11">
-                <small>Use commas to separate multiple IP addresses.</small>
-              </label>
-
-              <label>Attributes (JSON)
-                <textarea id="asset-attributes" rows="4" placeholder='{"os": "Ubuntu 22.04"}'></textarea>
-                <small>Optional key/value metadata stored as JSON.</small>
-              </label>
-
-              <details open>
-                <summary>Polling Configuration</summary>
-                <label>
-                  <input type="checkbox" id="asset-poll-enabled">
-                  Enable Polling
-                </label>
-
-                <label>Polling Address
-                  <input type="text" id="asset-poll-address" placeholder="vpn.example.com or 203.0.113.20">
-                  <small>Optional hostname or IP used for polling. Leave empty to use the first known IP.</small>
-                </label>
-
-                <div class="grid">
-                  <label>Poll Type
-                    <select id="asset-poll-type">
-                      <option value="ping">Ping (Online Check Only)</option>
-                      <option value="ssh">SSH (Linux/Unix)</option>
-                      <option value="ssh_cisco">SSH (Cisco IOS)</option>
-                      <option value="wmi">WMI (Windows)</option>
-                      <option value="snmp">SNMP</option>
-                    </select>
-                  </label>
-                  <label>Poll Port (optional)
-                    <input type="number" id="asset-poll-port" placeholder="22 for SSH, 5985 for WMI">
-                  </label>
+    <section id="main" class="hidden flex-grow-1">
+      <div class="container py-4">
+        <!-- Toolbar -->
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-body">
+            <div class="row g-3 align-items-center">
+              <div class="col-xl-4 col-lg-5 col-md-6">
+                <div class="form-floating">
+                  <input id="search" class="form-control" placeholder="Search assets...">
+                  <label for="search">Search assets</label>
                 </div>
-
-                <div class="grid">
-                  <label>Poll Username
-                    <input type="text" id="asset-poll-username" placeholder="admin">
-                  </label>
-                  <label>Poll Password
-                    <input type="password" id="asset-poll-password" placeholder="Password">
-                  </label>
+              </div>
+              <div class="col-xl-3 col-lg-4 col-md-6">
+                <div class="form-floating">
+                  <select id="owner-filter" class="form-select">
+                    <option value="">All Owners</option>
+                  </select>
+                  <label for="owner-filter">Filter by owner</label>
                 </div>
-
-                <label id="asset-poll-enable-password-wrapper" style="display: none;">
-                  Enable Password (Cisco)
-                  <input type="password" id="asset-poll-enable-password" placeholder="Enable password">
-                  <small>Optional enable secret for Cisco devices requiring privileged commands.</small>
-                </label>
-              </details>
-
-              <div id="custom-fields-container"></div>
+              </div>
+              <div class="col-xl-5">
+                <div class="d-flex flex-wrap justify-content-xl-end gap-2">
+                  <button id="refresh" class="btn btn-outline-secondary">Refresh</button>
+                  <button id="new-asset" class="btn btn-primary">+ New Asset</button>
+                  <button id="column-config" class="btn btn-outline-secondary">Columns</button>
+                  <button id="settings-btn" class="btn btn-outline-secondary d-flex align-items-center gap-2">
+                    <i class="bi bi-gear-fill"></i>
+                    <span>Settings</span>
+                  </button>
+                </div>
+              </div>
             </div>
-
-            <footer class="modal-footer">
-              <button type="button" class="secondary modal-cancel">Cancel</button>
-              <button type="submit">Save Asset</button>
-            </footer>
-          </form>
-        </article>
-      </dialog>
-
-      <!-- Delete Modal -->
-      <dialog id="delete-modal">
-        <article>
-          <header>
-            <h3>Delete Asset</h3>
-            <button type="button" aria-label="Close" class="modal-close"></button>
-          </header>
-          <p>Are you sure you want to delete this asset?</p>
-          <p><strong id="delete-asset-name"></strong></p>
-          <p>This action cannot be undone.</p>
-          <div style="display: flex; gap: 10px;">
-            <button id="confirm-delete" class="contrast">Delete</button>
-            <button type="button" class="secondary modal-cancel">Cancel</button>
           </div>
-        </article>
-      </dialog>
+        </div>
 
-      <!-- Column Preferences Modal -->
-      <dialog id="column-modal">
-        <article>
-          <header>
-            <h3>Customize Columns</h3>
-            <button type="button" aria-label="Close" class="modal-close"></button>
-          </header>
-          <form id="column-form">
-            <div class="modal-body">
-              <fieldset>
-                <legend>Select the columns you want to see</legend>
-                <div id="column-options" class="column-options-grid"></div>
-              </fieldset>
-              <p id="column-error" class="form-error hidden"></p>
+        <!-- Asset Table -->
+        <div class="card border-0 shadow-sm">
+          <div class="table-responsive">
+            <table id="asset-table" class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr id="asset-table-head">
+                  <th scope="col">Name</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">IP Addresses</th>
+                  <th scope="col">MAC Address</th>
+                  <th scope="col">Owner</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Last Seen</th>
+                  <th scope="col" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="asset-list"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Asset Detail Modal -->
+        <dialog id="asset-view-modal" class="asset-view-modal">
+          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+            <div class="modal-content shadow-lg">
+              <div class="modal-header border-0">
+                <h3 id="asset-view-title" class="modal-title h4 mb-0">Asset Details</h3>
+                <button type="button" aria-label="Close" class="btn-close modal-close" data-close></button>
+              </div>
+              <div id="asset-view-body" class="modal-body py-4"></div>
+              <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-close>Close</button>
+              </div>
             </div>
-            <footer class="modal-footer">
-              <button type="button" id="reset-columns" class="secondary">Reset to Default</button>
-              <span class="flex-spacer"></span>
-              <button type="button" class="secondary modal-cancel">Cancel</button>
-              <button type="submit">Save</button>
-            </footer>
-          </form>
-        </article>
-      </dialog>
+          </div>
+        </dialog>
 
-      <!-- Polling Status -->
-      <footer style="margin-top: 20px;">
-        <span id="polling-status" style="color: var(--muted-color);">Polling: Unknown</span>
-      </footer>
+        <!-- Asset Create/Edit Modal -->
+        <dialog id="asset-modal" class="asset-modal">
+          <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow-lg">
+              <div class="modal-header border-0">
+                <h3 id="modal-title" class="modal-title h4 mb-0">Add Asset</h3>
+                <button type="button" aria-label="Close" class="btn-close modal-close"></button>
+              </div>
+              <form id="asset-form" class="modal-body">
+                <input type="hidden" id="asset-id">
+
+                <div class="row g-4">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-name">Name</label>
+                      <input type="text" id="asset-name" class="form-control" placeholder="Server-01" required>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-type">Type</label>
+                      <select id="asset-type" class="form-select" required>
+                        <option value="">Select asset type...</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-owner">Owner</label>
+                      <select id="asset-owner" class="form-select">
+                        <option value="">No Owner</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-mac">MAC Address</label>
+                      <input type="text" id="asset-mac" class="form-control" placeholder="AA:BB:CC:DD:EE:FF">
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-ips">IP Addresses</label>
+                      <input type="text" id="asset-ips" class="form-control" placeholder="192.168.1.10, 192.168.1.11">
+                      <div class="form-text">Use commas to separate multiple IP addresses.</div>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="mb-3">
+                      <label class="form-label" for="asset-attributes">Attributes (JSON)</label>
+                      <textarea id="asset-attributes" rows="4" class="form-control" placeholder='{"os": "Ubuntu 22.04"}'></textarea>
+                      <div class="form-text">Optional key/value metadata stored as JSON.</div>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <div class="card bg-light border-0">
+                      <div class="card-body">
+                        <details open>
+                          <summary class="fw-semibold">Polling Configuration</summary>
+                          <div class="pt-3">
+                            <div class="form-check mb-3">
+                              <input type="checkbox" id="asset-poll-enabled" class="form-check-input">
+                              <label class="form-check-label" for="asset-poll-enabled">Enable Polling</label>
+                            </div>
+                            <div class="mb-3">
+                              <label class="form-label" for="asset-poll-address">Polling Address</label>
+                              <input type="text" id="asset-poll-address" class="form-control" placeholder="vpn.example.com or 203.0.113.20">
+                              <div class="form-text">Optional hostname or IP used for polling. Leave empty to use the first known IP.</div>
+                            </div>
+                            <div class="row g-3">
+                              <div class="col-md-6">
+                                <label class="form-label" for="asset-poll-type">Poll Type</label>
+                                <select id="asset-poll-type" class="form-select">
+                                  <option value="ping">Ping (Online Check Only)</option>
+                                  <option value="ssh">SSH (Linux/Unix)</option>
+                                  <option value="ssh_cisco">SSH (Cisco IOS)</option>
+                                  <option value="wmi">WMI (Windows)</option>
+                                  <option value="snmp">SNMP</option>
+                                </select>
+                              </div>
+                              <div class="col-md-6">
+                                <label class="form-label" for="asset-poll-port">Poll Port (optional)</label>
+                                <input type="number" id="asset-poll-port" class="form-control" placeholder="22 for SSH, 5985 for WMI">
+                              </div>
+                            </div>
+                            <div class="row g-3 mt-0">
+                              <div class="col-md-6">
+                                <label class="form-label" for="asset-poll-username">Poll Username</label>
+                                <input type="text" id="asset-poll-username" class="form-control" placeholder="admin">
+                              </div>
+                              <div class="col-md-6">
+                                <label class="form-label" for="asset-poll-password">Poll Password</label>
+                                <input type="password" id="asset-poll-password" class="form-control" placeholder="Password">
+                              </div>
+                            </div>
+                            <div class="mt-3" id="asset-poll-enable-password-wrapper" style="display: none;">
+                              <label class="form-label" for="asset-poll-enable-password">Enable Password (Cisco)</label>
+                              <input type="password" id="asset-poll-enable-password" class="form-control" placeholder="Enable password">
+                              <div class="form-text">Optional enable secret for Cisco devices requiring privileged commands.</div>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12">
+                    <section id="custom-fields-container" class="modal-section d-none"></section>
+                  </div>
+                </div>
+              </form>
+              <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary modal-cancel">Cancel</button>
+                <button type="submit" form="asset-form" class="btn btn-primary">Save Asset</button>
+              </div>
+            </div>
+          </div>
+        </dialog>
+
+        <!-- Delete Modal -->
+        <dialog id="delete-modal" class="asset-modal">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow">
+              <div class="modal-header border-0">
+                <h3 class="modal-title h5 mb-0">Delete Asset</h3>
+                <button type="button" aria-label="Close" class="btn-close modal-close"></button>
+              </div>
+              <div class="modal-body">
+                <p class="mb-2">Are you sure you want to delete this asset?</p>
+                <p class="fw-semibold" id="delete-asset-name"></p>
+                <p class="text-muted">This action cannot be undone.</p>
+              </div>
+              <div class="modal-footer border-0">
+                <button id="confirm-delete" class="btn btn-danger">Delete</button>
+                <button type="button" class="btn btn-outline-secondary modal-cancel">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </dialog>
+
+        <!-- Column Preferences Modal -->
+        <dialog id="column-modal" class="asset-modal">
+          <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow">
+              <div class="modal-header border-0">
+                <h3 class="modal-title h5 mb-0">Customize Columns</h3>
+                <button type="button" aria-label="Close" class="btn-close modal-close"></button>
+              </div>
+              <form id="column-form">
+                <div class="modal-body">
+                  <fieldset class="border rounded-3 p-3">
+                    <legend class="float-none w-auto px-2">Select the columns you want to see</legend>
+                    <div id="column-options" class="row g-3" data-columns></div>
+                  </fieldset>
+                  <p id="column-error" class="form-error hidden"></p>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" id="reset-columns" class="btn btn-outline-secondary">Reset to Default</button>
+                  <div class="flex-spacer"></div>
+                  <button type="button" class="btn btn-outline-secondary modal-cancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </dialog>
+
+        <!-- Polling Status -->
+        <div class="d-flex justify-content-between align-items-center mt-4 text-muted small">
+          <span id="polling-status">Polling: Unknown</span>
+        </div>
+      </div>
     </section>
 
     <!-- Settings Section -->
-    <section id="settings" class="hidden">
-      <div style="max-width: 900px; margin: 20px auto;">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-          <h2>System Settings</h2>
-          <button id="back-to-main" class="secondary">← Back to Assets</button>
-        </header>
+    <section id="settings" class="hidden bg-light flex-grow-1">
+      <div class="container py-5">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+          <div>
+            <h2 class="h3 mb-1">System Settings</h2>
+            <p class="text-muted mb-0">Configure integrations, polling, and core system preferences.</p>
+          </div>
+          <button id="back-to-main" class="btn btn-outline-secondary align-self-start align-self-lg-center">← Back to Assets</button>
+        </div>
 
-        <!-- Settings Tabs -->
-        <nav>
-          <ul>
-            <li><a href="#ldap-settings" class="settings-tab active" data-tab="ldap">LDAP Settings</a></li>
-            <li><a href="#poller-settings" class="settings-tab" data-tab="poller">Polling</a></li>
-            <li><a href="#custom-fields-settings" class="settings-tab" data-tab="custom-fields">Custom Fields</a></li>
-            <li><a href="#system-settings" class="settings-tab" data-tab="system">System</a></li>
+        <nav class="mb-4">
+          <ul class="nav nav-pills flex-wrap gap-2">
+            <li class="nav-item">
+              <a href="#ldap-settings" class="settings-tab nav-link active" data-tab="ldap">LDAP Settings</a>
+            </li>
+            <li class="nav-item">
+              <a href="#poller-settings" class="settings-tab nav-link" data-tab="poller">Polling</a>
+            </li>
+            <li class="nav-item">
+              <a href="#custom-fields-settings" class="settings-tab nav-link" data-tab="custom-fields">Custom Fields</a>
+            </li>
+            <li class="nav-item">
+              <a href="#system-settings" class="settings-tab nav-link" data-tab="system">System</a>
+            </li>
           </ul>
         </nav>
 
-        <!-- LDAP Settings Panel -->
         <article id="ldap-settings" class="settings-panel active">
-          <h3>LDAP Configuration</h3>
-          <form id="ldap-form">
-            <input type="text" id="ldap-server" placeholder="LDAP Server (ldap://domain.com:389)" required>
-            <input type="text" id="ldap-base-dn" placeholder="Base DN (OU=Users,DC=corp,DC=example,DC=com)" required>
-            <input type="text" id="ldap-bind-dn" placeholder="Bind DN (CN=LDAP Reader,OU=Service Accounts,DC=corp,DC=example,DC=com)">
-            <input type="password" id="ldap-bind-password" placeholder="Bind Password">
-            <input type="text" id="ldap-user-filter" placeholder="User Filter (leave empty for default)">
-            <input type="text" id="ldap-user-attr" placeholder="Username Attribute (sAMAccountName)" value="sAMAccountName">
-            
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-              <button type="submit">Save Settings</button>
-              <button type="button" id="test-ldap" class="secondary">Test Connection</button>
-              <button type="button" id="import-ldap" class="secondary">Import Users</button>
+          <h3 class="h4 mb-4">LDAP Configuration</h3>
+          <form id="ldap-form" class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-server">LDAP Server</label>
+              <input type="text" id="ldap-server" class="form-control" placeholder="LDAP Server (ldap://domain.com:389)" required>
             </div>
-
-            <div id="ldap-status" class="alert"></div>
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-base-dn">Base DN</label>
+              <input type="text" id="ldap-base-dn" class="form-control" placeholder="Base DN (OU=Users,DC=corp,DC=example,DC=com)" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-bind-dn">Bind DN</label>
+              <input type="text" id="ldap-bind-dn" class="form-control" placeholder="Bind DN (CN=LDAP Reader,OU=Service Accounts,...)" >
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-bind-password">Bind Password</label>
+              <input type="password" id="ldap-bind-password" class="form-control" placeholder="Bind Password">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-user-filter">User Filter</label>
+              <input type="text" id="ldap-user-filter" class="form-control" placeholder="User Filter (leave empty for default)">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="ldap-user-attr">Username Attribute</label>
+              <input type="text" id="ldap-user-attr" class="form-control" placeholder="Username Attribute (sAMAccountName)" value="sAMAccountName">
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+              <button type="button" id="test-ldap" class="btn btn-outline-secondary">Test Connection</button>
+              <button type="button" id="import-ldap" class="btn btn-outline-secondary">Import Users</button>
+            </div>
+            <div class="col-12">
+              <div id="ldap-status" class="alert mt-2"></div>
+            </div>
           </form>
-          
-          <details style="margin-top: 20px;">
-            <summary><strong>Example LDAP Filters</strong></summary>
-            <div style="margin-top: 10px; font-size: 0.9em;">
-              <p><strong>Default (if empty):</strong> All users (disabled accounts are filtered out automatically)</p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person))</code>
-              
-              <p style="margin-top: 15px;"><strong>Users in a specific group:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(memberOf=CN=IT-Staff,OU=Groups,DC=corp,DC=example,DC=com))</code>
-              
-              <p style="margin-top: 15px;"><strong>Users with email addresses:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(mail=*))</code>
-              
-              <p style="margin-top: 15px;"><strong>Users in specific department:</strong></p>
-              <code style="display: block; background: #f5f5f5; padding: 8px; margin: 5px 0; border-radius: 4px;">(&(objectClass=user)(objectCategory=person)(department=IT))</code>
-              
-              <p style="margin-top: 15px;"><em>Tip: To import from a specific OU, change the Base DN above to point to that OU.</em></p>
-              <p style="margin-top: 5px;"><em>Example: OU=IT Department,OU=Users,DC=corp,DC=example,DC=com</em></p>
-              
-              <p style="margin-top: 15px;"><a href="https://github.com/mcnutter1/ig-asset-system/blob/main/docs/LDAP_FILTERS.md" target="_blank" style="color: #0066cc;">View full filter documentation →</a></p>
+
+          <details class="mt-4">
+            <summary class="fw-semibold">Example LDAP Filters</summary>
+            <div class="mt-3 text-muted small">
+              <p class="mb-2"><strong>Default (if empty):</strong> All users (disabled accounts are filtered out automatically)</p>
+              <code class="d-block bg-light border rounded px-3 py-2 mb-3">(&(objectClass=user)(objectCategory=person))</code>
+
+              <p class="mb-2"><strong>Users in a specific group:</strong></p>
+              <code class="d-block bg-light border rounded px-3 py-2 mb-3">(&(objectClass=user)(objectCategory=person)(memberOf=CN=IT-Staff,OU=Groups,DC=corp,DC=example,DC=com))</code>
+
+              <p class="mb-2"><strong>Users with email addresses:</strong></p>
+              <code class="d-block bg-light border rounded px-3 py-2 mb-3">(&(objectClass=user)(objectCategory=person)(mail=*))</code>
+
+              <p class="mb-2"><strong>Users in specific department:</strong></p>
+              <code class="d-block bg-light border rounded px-3 py-2 mb-3">(&(objectClass=user)(objectCategory=person)(department=IT))</code>
+
+              <p class="mb-2"><em>Tip: To import from a specific OU, change the Base DN above to point to that OU.</em></p>
+              <p class="mb-3"><em>Example: OU=IT Department,OU=Users,DC=corp,DC=example,DC=com</em></p>
+
+              <p class="mb-0"><a href="https://github.com/mcnutter1/ig-asset-system/blob/main/docs/LDAP_FILTERS.md" target="_blank" class="text-decoration-none">View full filter documentation →</a></p>
             </div>
           </details>
         </article>
 
-        <!-- Polling Settings Panel -->
-        <article id="poller-settings" class="settings-panel" style="display: none;">
-          <h3>Polling Configuration</h3>
-          <form id="poller-form">
-            <label>
-              Polling Interval (seconds)
-              <input type="number" id="poller-interval" min="5" max="3600" value="30" required>
-              <small>How often to poll targets (5-3600 seconds)</small>
-            </label>
-
-            <label>
-              Connection Timeout (seconds)
-              <input type="number" id="poller-timeout" min="1" max="60" value="10" required>
-              <small>SSH/HTTP connection timeout (1-60 seconds)</small>
-            </label>
-
-            <label>
-              Ping Timeout (seconds)
-              <input type="number" id="poller-ping-timeout" min="1" max="10" value="1" required>
-              <small>Network ping timeout (1-10 seconds)</small>
-            </label>
-
-            <label>
-              API URL
-              <input type="url" id="poller-api-url" placeholder="http://localhost:8080/api.php" required>
-              <small>API endpoint for poller to send updates</small>
-            </label>
-
-            <label>
-              API Key
-              <input type="text" id="poller-api-key" placeholder="Enter API authentication key" required>
-              <small>Authentication key for API access</small>
-            </label>
-
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-              <button type="submit">Save Settings</button>
+        <article id="poller-settings" class="settings-panel">
+          <h3 class="h4 mb-4">Polling Configuration</h3>
+          <form id="poller-form" class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="poller-interval">Polling Interval (seconds)</label>
+              <input type="number" id="poller-interval" class="form-control" min="5" max="3600" value="30" required>
+              <div class="form-text">How often to poll targets (5–3600 seconds)</div>
             </div>
+            <div class="col-md-4">
+              <label class="form-label" for="poller-timeout">Connection Timeout (seconds)</label>
+              <input type="number" id="poller-timeout" class="form-control" min="1" max="60" value="10" required>
+              <div class="form-text">SSH/HTTP connection timeout (1–60 seconds)</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="poller-ping-timeout">Ping Timeout (seconds)</label>
+              <input type="number" id="poller-ping-timeout" class="form-control" min="1" max="10" value="1" required>
+              <div class="form-text">Network ping timeout (1–10 seconds)</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="poller-api-url">API URL</label>
+              <input type="url" id="poller-api-url" class="form-control" placeholder="http://localhost:8080/api.php" required>
+              <div class="form-text">API endpoint for poller to send updates</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="poller-api-key">API Key</label>
+              <input type="text" id="poller-api-key" class="form-control" placeholder="Enter API authentication key" required>
+              <div class="form-text">Authentication key for API access</div>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+            <div class="col-12">
+              <div id="poller-config-status" class="alert mt-2"></div>
+            </div>
+          </form>
 
-            <div id="poller-config-status" class="alert"></div>
-
-            <h4 style="margin-top: 30px;">Poller Instances</h4>
-            <p style="color: var(--muted-color);">
-              Configure DNS servers for each poller agent. Pollers use the <code>POLLER_NAME</code> environment variable to pick a profile;
-              when no profile is found, the default entry is used and the system resolver applies.
+          <div class="mt-5">
+            <h4 class="h5 mb-3">Poller Instances</h4>
+            <p class="text-muted small mb-3">
+              Configure DNS servers for each poller agent. Pollers use the <code>POLLER_NAME</code> environment variable to pick a profile; when no profile is found, the default entry is used and the system resolver applies.
             </p>
             <div id="poller-instances-status" class="alert"></div>
-            <div id="poller-instances-list" class="poller-instance-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
-            <div class="grid" style="margin-top: 15px;">
-              <label>Poller Name
-                <input type="text" id="new-poller-name" placeholder="edge-01">
-              </label>
-              <label>DNS Servers (comma-separated)
-                <input type="text" id="new-poller-dns" placeholder="1.1.1.1, 9.9.9.9">
-              </label>
+            <div id="poller-instances-list" class="poller-instance-list d-flex flex-column gap-3"></div>
+            <div class="row g-3 align-items-end mt-1">
+              <div class="col-md-4">
+                <label class="form-label" for="new-poller-name">Poller Name</label>
+                <input type="text" id="new-poller-name" class="form-control" placeholder="edge-01">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="new-poller-dns">DNS Servers (comma-separated)</label>
+                <input type="text" id="new-poller-dns" class="form-control" placeholder="1.1.1.1, 9.9.9.9">
+              </div>
+              <div class="col-md-2 d-grid">
+                <button type="button" id="add-poller-instance" class="btn btn-outline-secondary">Add Poller Profile</button>
+              </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-              <button type="button" id="add-poller-instance" class="secondary">Add Poller Profile</button>
-              <small style="align-self: center; color: var(--muted-color);">The <strong>default</strong> profile cannot be removed.</small>
-            </div>
+            <small class="text-muted d-block mt-2">The <strong>default</strong> profile cannot be removed.</small>
+          </div>
 
-            <h4 style="margin-top: 30px;">Sanitization Rules</h4>
-            <p style="color: var(--muted-color);">
-              Define JSON rules that remove sensitive data (e.g., loopback or link-local addresses) before poller results are sent back to the server.
-              The poller downloads this file during configuration reloads; changes take effect on the next poller refresh.
+          <div class="mt-5">
+            <h4 class="h5 mb-3">Sanitization Rules</h4>
+            <p class="text-muted small mb-3">
+              Define JSON rules that remove sensitive data (e.g., loopback or link-local addresses) before poller results are returned. Changes take effect on the next poller refresh.
             </p>
             <div id="poller-sanitization-status" class="alert"></div>
             <div class="sanitization-editor">
-              <textarea id="sanitization-rules-editor" spellcheck="false" aria-label="Sanitization rules JSON"></textarea>
+              <textarea id="sanitization-rules-editor" class="form-control" spellcheck="false" aria-label="Sanitization rules JSON"></textarea>
             </div>
-            <div class="sanitization-actions">
-              <div class="sanitization-actions-buttons">
-                <button type="button" id="format-sanitization-rules" class="secondary">Format JSON</button>
-                <button type="button" id="reset-sanitization-rules" class="secondary">Reset to Defaults</button>
-                <button type="button" id="save-sanitization-rules">Save Rules</button>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" id="format-sanitization-rules" class="btn btn-outline-secondary">Format JSON</button>
+                <button type="button" id="reset-sanitization-rules" class="btn btn-outline-secondary">Reset to Defaults</button>
+                <button type="button" id="save-sanitization-rules" class="btn btn-primary">Save Rules</button>
               </div>
-              <span id="sanitization-updated-at" class="sanitization-updated"></span>
+              <span id="sanitization-updated-at" class="sanitization-updated text-muted small"></span>
             </div>
+          </div>
 
-            <h4 style="margin-top: 30px;">Polling Control</h4>
-            <div style="display: flex; gap: 10px;">
-              <button type="button" id="start-polling-settings" class="success">▶ Start Polling</button>
-              <button type="button" id="stop-polling-settings" class="contrast">⏸ Stop Polling</button>
-              <span id="polling-status-settings" style="align-self: center; padding: 0 10px;"></span>
+          <div class="mt-5">
+            <h4 class="h5 mb-3">Polling Control</h4>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button type="button" id="start-polling-settings" class="btn btn-success d-flex align-items-center gap-2">▶ Start Polling</button>
+              <button type="button" id="stop-polling-settings" class="btn btn-danger d-flex align-items-center gap-2">⏸ Stop Polling</button>
+              <span id="polling-status-settings" class="text-muted small"></span>
             </div>
+          </div>
 
-            <h4 style="margin-top: 30px;">Live Polling Logs</h4>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-              <button type="button" id="start-log-stream" class="success">▶ Start Log Stream</button>
-              <button type="button" id="stop-log-stream" class="contrast">⏸ Stop Log Stream</button>
-              <button type="button" id="clear-logs">Clear Logs</button>
+          <div class="mt-5">
+            <h4 class="h5 mb-3">Live Polling Logs</h4>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" id="start-log-stream" class="btn btn-success d-flex align-items-center gap-2">▶ Start Log Stream</button>
+              <button type="button" id="stop-log-stream" class="btn btn-danger d-flex align-items-center gap-2">⏸ Stop Log Stream</button>
+              <button type="button" id="clear-logs" class="btn btn-outline-secondary">Clear Logs</button>
             </div>
-            <div id="poller-logs" style="
-              background: #000; 
-              color: #0f0; 
-              font-family: 'Courier New', monospace; 
-              font-size: 12px; 
-              padding: 10px; 
-              height: 400px; 
-              overflow-y: auto; 
-              border: 1px solid var(--muted-border-color);
-              border-radius: 4px;
-            "></div>
-          </form>
+            <div id="poller-logs"></div>
+          </div>
         </article>
 
-        <!-- Custom Fields Settings Panel -->
-        <article id="custom-fields-settings" class="settings-panel" style="display: none;">
-          <h3>Custom Fields Management</h3>
-          <p style="color: var(--muted-color); margin-bottom: 20px;">
-            Create custom fields that will appear when viewing or editing assets. Fields can be applied to all asset types or specific types only.
+        <article id="custom-fields-settings" class="settings-panel">
+          <h3 class="h4 mb-3">Custom Fields Management</h3>
+          <p class="text-muted mb-3">
+            Create custom fields that will appear when viewing or editing assets. Fields can target all asset types or specific types only.
           </p>
-
-          <button id="add-custom-field-btn" style="margin-bottom: 20px;">+ Add Custom Field</button>
-
-          <div id="custom-fields-list" style="display: grid; gap: 15px;">
-            <!-- Custom fields will be loaded here -->
-          </div>
+          <button id="add-custom-field-btn" class="btn btn-primary mb-3">+ Add Custom Field</button>
+          <div id="custom-fields-list"></div>
         </article>
 
-        <!-- System Settings Panel -->
-        <article id="system-settings" class="settings-panel" style="display: none;">
-          <h3>System Information</h3>
-          
-          <h4>System Status</h4>
-          <div id="system-health-display" style="display: grid; gap: 10px;">
-            <!-- Health info will be loaded here -->
-          </div>
-
-          <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="button" id="check-health-btn" class="secondary">Check System Health</button>
-            <button type="button" id="download-logs-btn" class="secondary">Download Logs</button>
+        <article id="system-settings" class="settings-panel">
+          <h3 class="h4 mb-3">System Information</h3>
+          <h4 class="h5">System Status</h4>
+          <div id="system-health-display" class="row g-3 mb-4"></div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="check-health-btn" class="btn btn-outline-secondary">Check System Health</button>
+            <button type="button" id="download-logs-btn" class="btn btn-outline-secondary">Download Logs</button>
           </div>
         </article>
       </div>
     </section>
 
     <!-- Custom Field Edit Modal -->
-    <dialog id="custom-field-modal">
-      <article style="width: 600px;">
-        <header>
-          <h3 id="field-modal-title">Add Custom Field</h3>
-            <button type="button" aria-label="Close" class="modal-close"></button>
-        </header>
-        <form id="custom-field-form">
-          <input type="hidden" id="field-id">
-          
-          <label>Field Name (identifier, snake_case)
-            <input type="text" id="field-name" placeholder="serial_number" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
-          </label>
-
-          <label>Display Label
-            <input type="text" id="field-label" placeholder="Serial Number" required>
-          </label>
-
-          <label>Field Type
-            <select id="field-type" required>
-              <option value="text">Text</option>
-              <option value="textarea">Text Area</option>
-              <option value="number">Number</option>
-              <option value="date">Date</option>
-              <option value="select">Dropdown Select</option>
-              <option value="checkbox">Checkbox</option>
-              <option value="email">Email</option>
-              <option value="url">URL</option>
-            </select>
-          </label>
-
-          <div id="select-options-container" style="display: none;">
-            <label>Dropdown Options (one per line)
-              <textarea id="field-select-options" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
-              <small>Enter each option on a new line</small>
-            </label>
+    <dialog id="custom-field-modal" class="asset-modal">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow">
+          <div class="modal-header border-0">
+            <h3 id="field-modal-title" class="modal-title h5 mb-0">Add Custom Field</h3>
+            <button type="button" aria-label="Close" class="btn-close modal-close"></button>
           </div>
+          <form id="custom-field-form">
+            <div class="modal-body">
+              <input type="hidden" id="field-id">
 
-          <label>Default Value
-            <input type="text" id="field-default-value" placeholder="Optional default value">
-          </label>
-
-          <label>Help Text
-            <input type="text" id="field-help-text" placeholder="Help text shown to users">
-          </label>
-
-          <label>
-            <input type="checkbox" id="field-required">
-            Required Field
-          </label>
-
-          <label>Apply to Asset Types (leave empty for all types)
-            <input type="text" id="field-applies-to" placeholder="server, workstation, network-device (comma-separated)">
-            <small>Leave empty to apply to all asset types, or specify comma-separated types</small>
-          </label>
-
-          <label>Display Order
-            <input type="number" id="field-display-order" value="0" min="0" step="10">
-            <small>Controls the order fields appear (lower numbers first)</small>
-          </label>
-
-          <footer style="display: flex; gap: 10px; justify-content: flex-end;">
-            <button type="button" class="secondary" onclick="document.getElementById('custom-field-modal').close()">Cancel</button>
-            <button type="submit">Save Field</button>
-          </footer>
-        </form>
-      </article>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label" for="field-name">Field Name (snake_case)</label>
+                  <input type="text" id="field-name" class="form-control" placeholder="serial_number" required pattern="[a-z_]+" title="Lowercase letters and underscores only">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-label">Display Label</label>
+                  <input type="text" id="field-label" class="form-control" placeholder="Serial Number" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-type">Field Type</label>
+                  <select id="field-type" class="form-select" required>
+                    <option value="text">Text</option>
+                    <option value="textarea">Text Area</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="select">Dropdown Select</option>
+                    <option value="checkbox">Checkbox</option>
+                    <option value="email">Email</option>
+                    <option value="url">URL</option>
+                  </select>
+                </div>
+                <div class="col-md-6" id="select-options-container" style="display: none;">
+                  <label class="form-label" for="field-select-options">Dropdown Options (one per line)</label>
+                  <textarea id="field-select-options" rows="4" class="form-control" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
+                  <div class="form-text">Enter each option on a new line.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-default-value">Default Value</label>
+                  <input type="text" id="field-default-value" class="form-control" placeholder="Optional default value">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-help-text">Help Text</label>
+                  <input type="text" id="field-help-text" class="form-control" placeholder="Help text shown to users">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check mt-2">
+                    <input type="checkbox" id="field-required" class="form-check-input">
+                    <label class="form-check-label" for="field-required">Required Field</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-applies-to">Apply to Asset Types (optional)</label>
+                  <input type="text" id="field-applies-to" class="form-control" placeholder="server, workstation, network-device">
+                  <div class="form-text">Leave empty to apply to all asset types.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" for="field-display-order">Display Order</label>
+                  <input type="number" id="field-display-order" class="form-control" value="0" min="0" step="10">
+                  <div class="form-text">Controls the order fields appear (lower numbers first).</div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('custom-field-modal').close()">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Field</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </dialog>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>
