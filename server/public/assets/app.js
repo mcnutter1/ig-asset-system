@@ -102,8 +102,8 @@ const renderJsonNode = (value, depth = 0, keyLabel = null) => {
       return `<div class="json-row">${keyHtml}<span class="json-primitive json-empty-array">[]</span></div>`;
     }
     const summaryLabel = keyLabel !== null
-      ? `${escapeHtml(keyLabel)} · Array (${value.length})`
-      : `Array (${value.length})`;
+      ? `${escapeHtml(keyLabel)} · Array (${value.length} item${value.length === 1 ? '' : 's'})`
+      : `Array · ${value.length} item${value.length === 1 ? '' : 's'}`;
     const children = value
       .map((item, index) => renderJsonNode(item, depth + 1, `[${index}]`))
       .join('');
@@ -115,9 +115,10 @@ const renderJsonNode = (value, depth = 0, keyLabel = null) => {
       const keyHtml = keyLabel !== null ? `<span class="json-key">${escapeHtml(keyLabel)}</span>` : '';
       return `<div class="json-row">${keyHtml}<span class="json-primitive json-empty-object">{}</span></div>`;
     }
+    // Use the keyLabel as the friendly name if available, otherwise show property count
     const summaryLabel = keyLabel !== null
-      ? `${escapeHtml(keyLabel)} · Object (${entries.length})`
-      : `Object (${entries.length})`;
+      ? `${escapeHtml(keyLabel)} · ${entries.length} propert${entries.length === 1 ? 'y' : 'ies'}`
+      : `${entries.length} propert${entries.length === 1 ? 'y' : 'ies'}`;
     const children = entries
       .map(([childKey, childValue]) => renderJsonNode(childValue, depth + 1, childKey))
       .join('');
