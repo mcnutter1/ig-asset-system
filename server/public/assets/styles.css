@@ -68,48 +68,52 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-/* Compact Typography */
+/* Optimized Typography */
 h1, h2, h3, h4, h5, h6 {
   margin-top: 0;
   margin-bottom: var(--spacing-md);
   line-height: 1.3;
 }
 
-h1 { font-size: 1.75rem; }
+h1 { font-size: 1.875rem; }
 h2 { font-size: 1.5rem; }
 h3 { font-size: 1.25rem; }
-h4 { font-size: 1.1rem; }
+h4 { font-size: 1.125rem; }
 h5, h6 { font-size: 1rem; }
 
-/* Compact Form Elements */
+/* Balanced Form Elements */
 input, select, textarea {
   margin-bottom: var(--spacing-md) !important;
-  padding: var(--spacing-sm) var(--spacing-md) !important;
+  padding: 10px 14px !important;
   font-size: 14px !important;
+  line-height: 1.5 !important;
 }
 
 label {
   margin-bottom: var(--spacing-xs) !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 500;
+  display: block;
 }
 
 label small {
   display: block;
   margin-top: var(--spacing-xs);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 button {
-  padding: var(--spacing-sm) var(--spacing-lg) !important;
-  font-size: 13px !important;
+  padding: 10px 20px !important;
+  font-size: 14px !important;
   font-weight: 500;
   margin: 0 !important;
+  line-height: 1.5 !important;
+  white-space: nowrap;
 }
 
 /* Main Sections */
@@ -121,12 +125,29 @@ section.hidden {
   display: none;
 }
 
+/* Header/Navbar */
+.app-navbar {
+  background: var(--accent-blue);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-navbar .navbar {
+  padding: 12px 0;
+}
+
+.app-navbar .navbar-brand {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
 #login-panel {
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--primary-bg);
   min-height: 100vh;
+  padding: var(--spacing-xl);
 }
 
 #login-panel article {
@@ -201,31 +222,33 @@ nav select {
   max-width: 250px;
 }
 
-/* Compact Asset Table */
+/* Improved Asset Table */
 #asset-table {
   width: 100%;
   margin: 0;
   border-collapse: collapse;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
+  table-layout: auto;
 }
 
 #asset-table thead {
   background: var(--tertiary-bg);
-  border-bottom: 1px solid rgba(53, 99, 233, 0.25);
+  border-bottom: 2px solid rgba(53, 99, 233, 0.25);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
 #asset-table th {
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-primary);
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 #asset-table th:last-child {
@@ -238,23 +261,24 @@ nav select {
 }
 
 #asset-table tbody tr:hover {
-  background: rgba(53, 99, 233, 0.08);
+  background: rgba(53, 99, 233, 0.06);
 }
 
 #asset-table td {
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 14px 16px;
   vertical-align: middle;
-  font-size: 0.95rem;
+  font-size: 14px;
 }
 
 #asset-table td.actions-cell {
   text-align: right;
+  white-space: nowrap;
 }
 
 .action-buttons {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .monospace {
@@ -263,8 +287,8 @@ nav select {
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -274,11 +298,12 @@ nav select {
   justify-content: center;
   padding: 0 !important;
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
 }
 
 .icon-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .icon-btn:hover {
@@ -299,9 +324,9 @@ nav select {
   outline-offset: 2px;
 }
 
-#asset-table button {
-  font-size: 11px !important;
-  padding: 4px 10px !important;
+#asset-table button:not(.icon-btn) {
+  font-size: 13px !important;
+  padding: 6px 12px !important;
 }
 
 /* Compact Main Container */
@@ -312,10 +337,11 @@ nav select {
 
 /* Asset View Modal */
 .asset-view-modal {
-  width: min(1040px, 94vw);
+  width: min(1200px, 96vw);
+  max-width: 96vw;
   background: var(--secondary-bg);
   border: 1px solid rgba(53, 99, 233, 0.12);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 0;
   box-shadow: var(--shadow-soft);
 }
@@ -327,17 +353,17 @@ nav select {
 .asset-view-modal article {
   display: flex;
   flex-direction: column;
-  max-height: 92vh;
+  max-height: 90vh;
 }
 
 .asset-view-modal header {
-  padding: var(--spacing-2xl) var(--spacing-2xl) var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-lg);
   border-bottom: 1px solid rgba(53, 99, 233, 0.12);
 }
 
 .asset-view-modal header h3 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   letter-spacing: -0.02em;
 }
 
@@ -730,18 +756,19 @@ nav select {
   color: var(--text-muted);
 }
 
-/* Compact Modal Dialogs */
+/* Improved Modal Dialogs */
 dialog {
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  max-width: 580px;
+  border-radius: 12px;
+  max-width: min(640px, 94vw);
+  width: 94vw;
   padding: 0;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
 }
 
 dialog::backdrop {
-  background: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 dialog article {
@@ -749,37 +776,38 @@ dialog article {
   padding: 0;
   display: flex;
   flex-direction: column;
-  max-height: 85vh;
+  max-height: 88vh;
 }
 
 dialog header {
   position: relative;
-  padding: var(--spacing-lg);
-  padding-right: calc(var(--spacing-xl) + 20px);
+  padding: var(--spacing-xl);
+  padding-right: calc(var(--spacing-2xl) + 30px);
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 0;
 }
 
 dialog header h3 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 dialog header .modal-close {
   position: absolute;
-  top: var(--spacing-sm);
-  right: var(--spacing-sm);
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--accent-blue);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 300;
   padding: 0 !important;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -791,7 +819,7 @@ dialog header .modal-close::before {
 }
 
 dialog header .modal-close:hover {
-  background: rgba(53, 99, 233, 0.12);
+  background: rgba(53, 99, 233, 0.1);
   color: var(--accent-blue);
   transform: rotate(90deg);
 }
@@ -810,36 +838,38 @@ dialog form {
 
 dialog fieldset {
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: var(--spacing-md);
+  border-radius: 8px;
+  padding: var(--spacing-lg);
   margin: 0 0 var(--spacing-lg) 0;
+  background: rgba(53, 99, 233, 0.02);
 }
 
 dialog fieldset legend {
   font-weight: 600;
   margin-bottom: var(--spacing-sm);
   padding: 0 var(--spacing-sm);
+  font-size: 14px;
 }
 
 dialog .modal-body {
-  padding: var(--spacing-lg);
+  padding: var(--spacing-xl);
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
 }
 
 dialog .modal-footer {
   position: sticky;
   bottom: 0;
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl);
   border-top: 1px solid var(--border-color);
   background: var(--secondary-bg);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
   z-index: 5;
 }
 
@@ -854,20 +884,20 @@ dialog .modal-cancel {
 }
 
 dialog .modal-cancel:hover {
-  background: #e8edff;
+  background: rgba(53, 99, 233, 0.08);
   color: var(--text-primary);
 }
 
 dialog hr {
-  margin: var(--spacing-lg) 0;
+  margin: var(--spacing-xl) 0;
   border-color: var(--border-color);
 }
 
 dialog h4 {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
   margin-bottom: var(--spacing-md);
-  font-size: 1rem;
-  color: var(--accent-blue);
+  font-size: 1.1rem;
+  color: var(--text-primary);
 }
 
 /* Compact Details/Summary */
@@ -896,108 +926,120 @@ details[open] summary {
   padding-bottom: var(--spacing-sm);
 }
 
-/* Compact Settings */
+/* Settings Panel */
 #settings {
   background: var(--primary-bg);
   min-height: 100vh;
 }
 
 #settings > div {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-xl);
 }
 
 #settings header {
-  margin-bottom: var(--spacing-lg);
-  padding-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
   border-bottom: 1px solid var(--border-color);
 }
 
 #settings header h2 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 1.75rem;
+}
+
+#settings header p {
+  color: var(--text-muted);
   margin: 0;
 }
 
 #settings nav ul {
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xl);
   flex-wrap: wrap;
 }
 
 #settings article {
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  border-radius: 12px;
+  padding: var(--spacing-2xl);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 #settings article h3 {
   margin-top: 0;
-  margin-bottom: var(--spacing-md);
-  font-size: 1.3rem;
-  color: var(--accent-blue);
+  margin-bottom: var(--spacing-lg);
+  font-size: 1.5rem;
+  color: var(--text-primary);
 }
 
 #settings article h4 {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
   margin-bottom: var(--spacing-md);
-  font-size: 1.1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 .settings-tab {
-  padding: var(--spacing-sm) var(--spacing-lg);
+  padding: 10px 18px;
   background: var(--tertiary-bg);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 
 .settings-tab:hover {
-  background: #e2e8ff;
-  border-color: rgba(53, 99, 233, 0.4);
+  background: rgba(53, 99, 233, 0.1);
+  border-color: rgba(53, 99, 233, 0.3);
   transform: translateY(-1px);
+  color: var(--accent-blue);
 }
 
 .settings-tab.active {
   background: var(--accent-blue);
   border-color: var(--accent-blue);
   color: white;
-  box-shadow: 0 4px 14px rgba(53, 99, 233, 0.25);
+  box-shadow: 0 4px 12px rgba(53, 99, 233, 0.3);
 }
 
 .column-options-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--spacing-sm);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-md);
 }
 
 .column-options-grid label {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
   border: 1px solid rgba(53, 99, 233, 0.15);
-  border-radius: 6px;
-  background: rgba(53, 99, 233, 0.05);
-  font-size: 13px;
+  border-radius: 8px;
+  background: rgba(53, 99, 233, 0.04);
+  font-size: 14px;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .column-options-grid label:hover {
-  background: rgba(53, 99, 233, 0.12);
-  border-color: rgba(53, 99, 233, 0.35);
+  background: rgba(53, 99, 233, 0.1);
+  border-color: rgba(53, 99, 233, 0.3);
   transform: translateY(-1px);
 }
 
 .column-options-grid input[type="checkbox"] {
   margin: 0;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
 }
 
 .settings-panel {
@@ -1098,16 +1140,18 @@ footer {
 
 .empty-state {
   text-align: center;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-2xl) var(--spacing-xl);
   color: var(--text-muted);
+  font-size: 14px;
 }
 
 .alert {
-  padding: var(--spacing-md);
-  border-radius: 4px;
-  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: 8px;
+  margin: var(--spacing-md) 0;
   display: none;
-  font-size: 13px;
+  font-size: 14px;
+  border: 1px solid;
 }
 
 .alert.show {
@@ -1115,33 +1159,37 @@ footer {
 }
 
 .alert.success {
-  background: rgba(109, 209, 127, 0.1);
-  border: 1px solid rgba(109, 209, 127, 0.3);
-  color: var(--accent-green);
+  background: rgba(43, 164, 113, 0.12);
+  border-color: rgba(43, 164, 113, 0.3);
+  color: #1f7b55;
 }
 
 .alert.error {
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid rgba(255, 107, 107, 0.3);
-  color: var(--accent-red);
+  background: rgba(214, 69, 69, 0.12);
+  border-color: rgba(214, 69, 69, 0.3);
+  color: #b91c1c;
 }
 
 .alert.info {
-  background: rgba(74, 144, 226, 0.1);
-  border: 1px solid rgba(74, 144, 226, 0.3);
-  color: var(--accent-blue);
+  background: rgba(53, 99, 233, 0.12);
+  border-color: rgba(53, 99, 233, 0.3);
+  color: #1e40af;
 }
 
 .alert.warning {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
   color: #b45309;
 }
 
 .form-error {
   color: var(--accent-red);
-  font-size: 13px;
-  margin: -var(--spacing-sm) 0 var(--spacing-sm) 0;
+  font-size: 14px;
+  margin: var(--spacing-xs) 0 var(--spacing-md) 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(214, 69, 69, 0.08);
+  border-left: 3px solid var(--accent-red);
+  border-radius: 4px;
 }
 
 .form-error.hidden {
@@ -1279,7 +1327,7 @@ footer {
 @media (max-width: 768px) {
   nav {
     flex-direction: column;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-md);
   }
 
   nav ul {
@@ -1302,22 +1350,94 @@ footer {
   }
 
   dialog {
-    width: 95%;
-    max-width: 95%;
+    width: 96vw;
+    max-width: 96vw;
+  }
+
+  dialog .modal-body {
+    padding: var(--spacing-md);
+  }
+
+  dialog .modal-footer {
+    padding: var(--spacing-md);
+    flex-wrap: wrap;
   }
 
   #asset-table {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   #asset-table th,
   #asset-table td {
-    padding: var(--spacing-xs);
+    padding: 10px 12px;
   }
 
-  #asset-table button {
-    padding: 3px 8px !important;
-    font-size: 10px !important;
+  #asset-table button:not(.icon-btn) {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .asset-field {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-section {
+    padding: var(--spacing-lg);
+  }
+
+  .asset-view-modal header {
+    padding: var(--spacing-lg);
+  }
+
+  .asset-view-body {
+    padding: var(--spacing-lg);
+  }
+
+  .asset-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  button {
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+  }
+
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.125rem; }
+}
+
+@media (max-width: 480px) {
+  .action-buttons {
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  dialog header h3 {
+    font-size: 1.125rem;
+  }
+
+  .asset-view-modal header h3 {
+    font-size: 1.25rem;
   }
 }
 

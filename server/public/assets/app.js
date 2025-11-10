@@ -1910,6 +1910,61 @@ const setupAllHandlers = () => {
   // Asset management handlers
   el('#refresh').onclick = loadAssets;
 
+  // Export assets to CSV
+  el('#export-assets').onclick = () => {
+    const assets = lastRenderedAssets;
+    if (!assets || assets.length === 0) {
+      alert('No assets to export');
+      return;
+    }
+
+    // Build CSV header from active columns
+    const headers = activeAssetColumns.map(col => {
+      const def = assetColumnDefinitions[col];
+      return def ? def.label : col;
+    });
+    
+    // Build CSV rows
+    const rows = assets.map(asset => {
+      return activeAssetColumns.map(col => {
+        const def = assetColumnDefinitions[col];
+        if (!def) return '';
+        
+        // Extract plain text value
+        let value = '';
+        if (col === 'ips') {
+          value = Array.isArray(asset.ips) ? asset.ips.map(x => x.ip).filter(Boolean).join('; ') : '';
+        } else if (col === 'owner') {
+          value = getOwnerDisplayName(asset) || '';
+        } else if (col === 'status') {
+          value = asset.online_status || 'unknown';
+        } else if (col === 'last_seen' || col === 'created_at' || col === 'updated_at') {
+          value = formatDateTime(asset[col]) || '';
+        } else {
+          value = asset[col] || '';
+        }
+        
+        // Escape CSV value
+        value = String(value).replace(/"/g, '""');
+        return `"${value}"`;
+      });
+    });
+    
+    // Combine into CSV
+    const csv = [headers.map(h => `"${h}"`).join(','), ...rows.map(r => r.join(','))].join('\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `assets-export-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Column preferences modal
   const columnBtn = el('#column-config');
   if (columnBtn) {
